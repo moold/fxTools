@@ -6,11 +6,11 @@ use kseq::parse_path;
 use regex::Regex;
 use indoc::indoc;
 use std::path::Path;
-use std::{cmp::max, fmt, fs::File, io::{BufReader, BufRead}};
+use std::{cmp::max, fmt, fs::File, io::{BufReader, BufRead, Write}};
 
 #[derive(Default)]
 struct NX {
-    count: [u64; 10],
+    count: [usize; 10],
     len: [u32; 10],
 }
 
@@ -25,6 +25,23 @@ impl NX {
             width2 = 11;
         }
         (width1, width2)
+    }
+
+    fn fill_data(&mut self, lens: &[u32], total: usize) {
+        let mut i = 0;
+        let mut acc = 0;
+        for pos in (0..lens.len()).rev() {
+            acc += lens[pos] as usize;
+            self.count[i] += 1;
+            if acc as f64 > ((i + 1) * total) as f64 * 0.1 {
+                self.len[i] = lens[pos];
+                i += 1;
+                if i >= 10 {
+                    break;
+                }
+                self.count[i] += self.count[i - 1];
+            }
+        }
     }
 }
 
@@ -149,6 +166,88 @@ fn out_stat(lens: &[u32], total: usize) {
     );
 }
 
+fn count_by_min(lens: &[u32], min: u32) -> (usize, usize) {
+    let mut count = 0;
+    let mut total = 0;
+    for len in lens {
+        if *len >= min {
+            count += 1;
+            total += *len;
+        }
+    }
+    (total as usize, count)
+}
+
+fn out_stat_with_ctg(lens: &[u32], total: usize, ctg_lens: &[u32], ctg_total: usize, 
+        gap_lens: &[u32], gap_total: usize, genome_len: usize){
+    let mut stat: NX = Default::default();
+    let mut ctg_stat: NX = Default::default();
+    let mut gap_stat: NX = Default::default();
+    stat.fill_data(lens, if genome_len > 0 {genome_len}else{total});
+    ctg_stat.fill_data(ctg_lens, if genome_len > 0 {genome_len}else{ctg_total});
+    gap_stat.fill_data(gap_lens, gap_total);
+
+    println!("{:=<7}{:=^26}{:=^26}{:=^25}", "","","","");
+    println!("{:<7}{:^26}{:^26}{:^25}", "Types", "Scaffold", "Contig", "Gap" );
+    println!("{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+        "", "Length (bp)", "Count (#)", "Length (bp)", "Count (#)", "Length (bp)", "Count (#)" );
+    println!("{:-<7}{:-^26}{:-^26}{:-^25}", "","","","");
+    for i in 0..9 {
+        println!(
+            "N{:<6}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+            (i + 1) * 10,
+            stat.len[i], stat.count[i],
+            ctg_stat.len[i], ctg_stat.count[i],
+            gap_stat.len[i], gap_stat.count[i],
+        );
+    }
+    println!(
+        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+        "Longest",
+        lens.last().unwrap_or(&0), 1,
+        ctg_lens.last().unwrap_or(&0), 1,
+        gap_lens.last().unwrap_or(&0), if gap_lens.is_empty() {0} else {1},
+    );
+    println!(
+        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+        "Total",
+        total, lens.len(),
+        ctg_total, ctg_lens.len(),
+        gap_total, gap_lens.len(),
+    );
+    let (len_total, len_count) = count_by_min(lens, 10000);
+    let (ctg_total, ctg_count) = count_by_min(ctg_lens, 10000);
+    let (gap_total, gap_count) = count_by_min(gap_lens, 10000);
+    println!(
+        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+        ">=10kb",
+        len_total, len_count,
+        ctg_total, ctg_count,
+        gap_total, gap_count
+    );
+    let (len_total, len_count) = count_by_min(lens, 100000);
+    let (ctg_total, ctg_count) = count_by_min(ctg_lens, 100000);
+    let (gap_total, gap_count) = count_by_min(gap_lens, 100000);
+    println!(
+        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+        ">=100kb",
+        len_total, len_count,
+        ctg_total, ctg_count,
+        gap_total, gap_count
+    );
+    let (len_total, len_count) = count_by_min(lens, 1000000);
+    let (ctg_total, ctg_count) = count_by_min(ctg_lens, 1000000);
+    let (gap_total, gap_count) = count_by_min(gap_lens, 1000000);
+    println!(
+        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
+        ">=1mb",
+        len_total, len_count,
+        ctg_total, ctg_count,
+        gap_total, gap_count
+    );
+    println!("{:=<7}{:=^26}{:=^26}{:=^25}", "","","","");
+}
+
 fn out_attr(head: &str, len: usize, attr: &str, attr_lower: &str, letter_counts: &HashMap<u8, usize>) {
     let mut is_first = true;
     let mut s = 0;
@@ -256,6 +355,22 @@ fn main() {
                         .about("minimum gap (N) length, 0 means do not stat contig length")
                         .takes_value(true),
                 )
+                .arg(
+                    Arg::new("genome_len")
+                        .short('g')
+                        .long("genome_len")
+                        .value_name("INT")
+                        .default_value("0")
+                        // .requires("n_len")
+                        .about("genome size, 0 means calculate genome size using the input file, co-used with -n")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::new("out_ctg")
+                        .short('o')
+                        .long("out_ctg")
+                        .about("output contig sequences to <INPUT>.ctg.fa")
+                )
         )
         .subcommand(
             App::new("findSeq")
@@ -314,6 +429,19 @@ fn main() {
                         .about("complement the sequence")
                 )
         )
+        .subcommand(
+            App::new("fq2fa")
+                .about("converts a FASTQ to a FASTA")
+                .arg(
+                    Arg::new("min_len")
+                        .short('m')
+                        .long("min_len")
+                        .value_name("STR")
+                        .default_value("0")
+                        .about("minimum sequence length, shorter sequences are ignored")
+                        .takes_value(true),
+                )
+        )
         .get_matches();
 
     let path: Option<String> = args.value_of("input").map(str::to_string);
@@ -350,7 +478,7 @@ fn main() {
         };
         while let Some(record) = records.iter_record().unwrap() {
             for mat in re.find_iter(record.seq()) {
-                println!("{}\t{}\t{}", record.head(), mat.start(), mat.end());
+                println!("{}\t{}\t{}", record.head(), mat.start(), mat.end() - 1);
             }
         }
     }else if let Some(subarg) = args.subcommand_matches("findGap"){
@@ -358,8 +486,8 @@ fn main() {
         let re = Regex::new(r"(?i)N+").unwrap();
         while let Some(record) = records.iter_record().unwrap() {
             for mat in re.find_iter(record.seq()) {
-                if mat.end() - mat.start() + 1 > min_len as usize {
-                    println!("{}\t{}\t{}", record.head(), mat.start(), mat.end());
+                if mat.end() - mat.start() >= min_len as usize {
+                    println!("{}\t{}\t{}", record.head(), mat.start(), mat.end() - 1);
                 }
             }
         }
@@ -418,8 +546,24 @@ fn main() {
         }
     }else if let Some(subarg) = args.subcommand_matches("stat") {
         let min_len = Byte::from_str(subarg.value_of("min_len").unwrap()).unwrap().get_bytes();
+        let genome_len = Byte::from_str(subarg.value_of("genome_len").unwrap()).unwrap().get_bytes();
+        let n_len = Byte::from_str(subarg.value_of("n_len").unwrap()).unwrap().get_bytes();
         let mut lens = Vec::with_capacity(1024);
         let mut total: usize = 0;
+
+        let re = Regex::new(r"(?i)N+").unwrap();
+        let mut ctg_lens = Vec::with_capacity(1024);
+        let mut ctg_total: usize = 0;
+
+        let mut gap_lens = Vec::with_capacity(1024);
+        let mut gap_total: usize = 0;
+
+        let mut ctg_file = if subarg.is_present("out_ctg"){
+            let file = args.value_of("input").unwrap().to_owned() + ".ctg.fa";
+            Some(File::create(file.to_owned()).unwrap_or_else(|_| panic!("failed create file: {}", file)))
+        }else {
+            None
+        };
         while let Some(record) = records.iter_record().unwrap() {
             let len = record.len();
             if len < min_len as usize {
@@ -427,8 +571,51 @@ fn main() {
             }
             lens.push(len as u32);
             total += len;
+
+            if n_len > 0 {
+                let mut last_pos = 0;
+                let mut ctg_count = 1;
+                let seq = record.seq();
+                for mat in re.find_iter(seq) {
+                    // println!("{} {} {}",record.head(), mat.start(), mat.end());
+                    if mat.end() - mat.start() >= n_len as usize {
+                        if mat.start() > last_pos {
+                            ctg_lens.push((mat.start() - last_pos) as u32);
+                            ctg_total += mat.start() - last_pos;
+                            if let Some(ref mut file) = ctg_file {
+                                writeln!(file, ">{}_ctg{}\n{}", record.head(), ctg_count, &seq[last_pos..mat.start()]).unwrap();
+                                ctg_count += 1;
+                            }
+                        }
+                        gap_lens.push((mat.end() - mat.start()) as u32);
+                        gap_total += mat.end() - mat.start();
+                        last_pos = mat.end();
+                    }
+                }
+                if len > last_pos {
+                    ctg_lens.push((len - last_pos) as u32);
+                    ctg_total += len - last_pos;
+                    if let Some(ref mut file) = ctg_file {
+                        writeln!(file, ">{}_ctg{}\n{}", record.head(), ctg_count, &seq[last_pos..len]).unwrap();
+                    }
+                }
+            }
         }
         lens.sort_unstable();
-        out_stat(&lens, total);
+        if n_len > 0 {
+            ctg_lens.sort_unstable();
+            gap_lens.sort_unstable();
+           out_stat_with_ctg(&lens, total, &ctg_lens, ctg_total, &gap_lens, gap_total, genome_len as usize);
+        }else{
+            out_stat(&lens, total);
+        }
+    }else if let Some(subarg) = args.subcommand_matches("fq2fa") {
+        let min_len = Byte::from_str(subarg.value_of("min_len").unwrap()).unwrap().get_bytes();
+        while let Some(record) = records.iter_record().unwrap() {
+            if record.len() < min_len as usize {
+                continue;
+            }
+            println!(">{} {}\n{}", record.head(), record.des(), record.seq());
+        }
     }
 }
