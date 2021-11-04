@@ -406,13 +406,13 @@ fn main() {
         )
         .subcommand(
             App::new("getSeq")
-                .about("get sequences or subsequences from region or bed files")
+                .about("get sequences or subsequences from region or bed/ID files")
                 .arg(
                     Arg::new("region")
                         .short('r')
                         .long("region")
                         .value_name("STR|FILE")
-                        .about("region (chr, chr:start-end, chr-start-end) or bed file to be extract, format: 0-based, [start, end).")
+                        .about("region (chr, chr:start-end, chr-start-end) or bed/ID file to be extract, format: 0-based, [start, end).")
                         .required(true)
                         .takes_value(true)
                 )
@@ -501,16 +501,20 @@ fn main() {
             for line in BufReader::new(file).lines().flatten() {
                 if !line.starts_with('#'){
                     let v: Vec<&str> = line.split(char::is_whitespace).collect();
-                    out_info.entry(v[0].to_owned()).or_insert(vec![]).push((v[1].parse::<u32>().unwrap()-1, 
-                        v[2].parse::<u32>().unwrap()-1));
+                    let out_info = out_info.entry(v[0].to_owned()).or_insert(vec![]);
+                    if v.len() == 1 {
+                        out_info.push((0, 0))
+                    }else{
+                        out_info.push((v[1].parse::<u32>().unwrap_or(0), v[2].parse::<u32>().unwrap_or(0)))
+                    }
                 }
             }
         }else{
             let re = Regex::new(r"(?i)(\S+)[:-](start|\d+)[:-](end|\d+)$").unwrap();
             if let Some(caps) = re.captures(region){
                 let chr = caps.get(1).unwrap().as_str();
-                let start = caps.get(2).unwrap().as_str().parse::<u32>().unwrap_or(1);
-                let end = caps.get(3).unwrap().as_str().parse::<u32>().unwrap_or(1);
+                let start = caps.get(2).unwrap().as_str().parse::<u32>().unwrap_or(0);
+                let end = caps.get(3).unwrap().as_str().parse::<u32>().unwrap_or(0);
                 out_info.insert(chr.to_owned(), vec![(start, end)]);
             }else{
                 out_info.insert(region.to_owned(), vec![(0, 0)]);
@@ -527,6 +531,9 @@ fn main() {
                         *end = record.len() as u32;
                         sub_head = head.to_owned();
                     }else {
+                        if *end == 0 {
+                            *end = record.len() as u32;
+                        }
                         sub_head = format!("{}:{}-{}", head, start, *end-1);
                     }
                     if subarg.is_present("reverse"){
