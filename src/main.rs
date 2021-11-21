@@ -1,5 +1,5 @@
 use byte_unit::Byte;
-use clap::{crate_version, App, AppSettings, Arg};
+use clap::{crate_version, App, AppSettings, Arg, crate_name};
 use hashbrown::HashMap;
 use kseq::parse_path;
 // use lazy_static::lazy_static;
@@ -310,29 +310,47 @@ fn main() {
     let args = App::new("fastx")
         .version(crate_version!())
         .about("A toolset for processing sequences in FASTA/Q formats")
+        .override_usage(format!("{} [SUBCOMMAND] [OPTIONS] <input>", crate_name!()).as_str())
         .global_setting(AppSettings::ArgRequiredElseHelp)
         .global_setting(AppSettings::ColoredHelp)
         .global_setting(AppSettings::DisableHelpSubcommand)
         .global_setting(AppSettings::DeriveDisplayOrder)
+        // .global_setting(AppSettings::ArgsNegateSubcommands)
         // .global_setting(AppSettings::UnifiedHelpMessage)
         .arg(
             Arg::new("input")
                 .about("input file")
-                .index(1)
-                .required(true),
+                .global(true)
         )
         .arg(
             Arg::new("attr")
                 .short('a')
                 .long("attr")
                 .value_name("STR")
-                .about(indoc!{
-                    "get sequence attributes, id:len:x
-                       len: sequences length
-                       x:   count x, case sensitive, where x can be a single base
-                            or multiple bases (gcGC means count g + c + G + C)."
-                    }
-                ).takes_value(true),
+                .about(indoc!{"
+                    get sequence attributes, id:len:x
+                      len: sequences length
+                      x:   count x, case sensitive, where x can be a single base
+                           or multiple bases (gcGC means count g + c + G + C)."
+                    })
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("reform")
+                .short('r')
+                .long("reform")
+                .value_name("STR")
+                .about(indoc!{"
+                    reform/modify the sequence, accept values:
+                      lower: convert sequences into lowercase
+                      upper: convert sequences into uppercase
+                      lineINT: wrap sequences into INT characters per line, 0 for no wrap
+                      linkINT: link sequences with INT Ns
+                      splitINT: split sequences at Ns with length >= INT
+                      fq2fa: converts FASTQ to FASTA
+                      fa2fq: converts FASTA to FASTQ"
+                })
+                .takes_value(true)
         )
         .subcommand(
             App::new("stat")
@@ -373,7 +391,7 @@ fn main() {
                 )
         )
         .subcommand(
-            App::new("findSeq")
+            App::new("findseq")
                 .about("find subseq positions")
                 .arg(
                     Arg::new("subseq")
@@ -392,7 +410,7 @@ fn main() {
                 )
         )
         .subcommand(
-            App::new("findGap")
+            App::new("findgap")
             .about("find gap(Nn) regions")
             .arg(
                 Arg::new("min_len")
@@ -405,14 +423,15 @@ fn main() {
             )
         )
         .subcommand(
-            App::new("getSeq")
-                .about("get sequences or subsequences from region or bed/ID files")
+            App::new("getseq")
+                .about("get sequences or subsequences from a region or file")
                 .arg(
                     Arg::new("region")
                         .short('r')
                         .long("region")
                         .value_name("STR|FILE")
-                        .about("region (chr, chr:start-end, chr-start-end) or bed/ID file to be extract, format: 0-based, [start, end).")
+                        .about("region (chr, chr:start-end, chr-start-end or chr1,chr2:start-end) or file (bed or ID list) \
+                            to be extracted, format: 0-based, [start, end).")
                         .required(true)
                         .takes_value(true)
                 )
@@ -430,16 +449,13 @@ fn main() {
                 )
         )
         .subcommand(
-            App::new("fq2fa")
-                .about("converts a FASTQ to a FASTA")
+            App::new("diff")
+                .about("compare sequences between files")
                 .arg(
-                    Arg::new("min_len")
-                        .short('m')
-                        .long("min_len")
-                        .value_name("STR")
-                        .default_value("0")
-                        .about("minimum sequence length, shorter sequences are ignored")
-                        .takes_value(true),
+                    Arg::new("base")
+                        .short('b')
+                        .long("base")
+                        .about("compare sequences with same ID base by base")
                 )
         )
         .get_matches();
@@ -469,7 +485,116 @@ fn main() {
         if is_total {
             out_attr("Total", total_len, attr, &attr_lower, &letter_counts);
         }
-    }else if let Some(subarg) = args.subcommand_matches("findSeq"){
+    }else if let Some(reform) = args.value_of("reform") {
+        let reform = reform.to_ascii_lowercase();
+        if reform == "lower" {
+            while let Some(record) = records.iter_record().unwrap() {
+                if record.sep().is_empty() {
+                    println!(">{} {}\n{}", record.head(), record.des(), record.seq().to_ascii_lowercase());
+                }else{
+                    println!("@{} {}\n{}\n{}\n{}", record.head(), record.des(), 
+                        record.seq().to_ascii_lowercase(), record.sep(), record.qual());
+                }
+            }
+        }else if reform == "upper" {
+            while let Some(record) = records.iter_record().unwrap() {
+                if record.sep().is_empty() {
+                    println!(">{} {}\n{}", record.head(), record.des(), record.seq().to_ascii_uppercase());
+                }else{
+                    println!("@{} {}\n{}\n{}\n{}", record.head(), record.des(), 
+                        record.seq().to_ascii_uppercase(), record.sep(), record.qual());
+                }
+            }
+        }else if reform == "fq2fa" {
+            while let Some(record) = records.iter_record().unwrap() {
+                println!(">{} {}\n{}", record.head(), record.des(), record.seq());
+            }
+        }else if reform == "fa2fq" {
+            while let Some(record) = records.iter_record().unwrap() {
+                println!("@{} {}\n{}\n+\n{:!<4$}", record.head(), record.des(),
+                    record.seq(), "", record.len());
+            }
+        }else if reform.starts_with("line"){
+            let w: usize = reform.strip_prefix("line").unwrap().parse().unwrap();
+            
+            while let Some(record) = records.iter_record().unwrap() {
+                if record.sep().is_empty() {
+                    println!(">{} {}", record.head(), record.des());
+                    if w == 0 {
+                        println!("{}", record.seq());
+                    }else {
+                        let (seq, len) = (record.seq(), record.len());
+                        for i in (0..len).step_by(w){
+                            if i + w < len {
+                                println!("{}", &seq[i..i + w]);
+                            }else{
+                                println!("{}", &seq[i..len]);
+                            }
+                        }
+                    }
+                }else{
+                    println!("@{} {}", record.head(), record.des());
+                    if w == 0 {
+                        println!("{}\n{}\n{}", record.seq(), record.sep(), record.qual());
+                    }else {
+                        let (seq, qual, len) = (record.seq(), record.qual(), record.len());
+                        for i in (0..len).step_by(w){
+                            if i + w < len {
+                                println!("{}", &seq[i..i + w]);
+                            }else{
+                                println!("{}", &seq[i..len]);
+                            }
+                        }
+                        println!("{}", record.sep());
+                        for i in (0..len).step_by(w){
+                            if i + w < len {
+                                println!("{}", &qual[i..i + w]);
+                            }else{
+                                println!("{}", &qual[i..len]);
+                            }
+                        }
+                    }
+                }
+            }
+        }else if reform.starts_with("link"){
+            let w: usize = reform.strip_prefix("link").unwrap().parse().unwrap();
+            println!(">link_reads");
+            let mut is_first = true;
+            while let Some(record) = records.iter_record().unwrap() {
+                if is_first{
+                    is_first = false;
+                    print!("{}", record.seq());
+                }else {
+                    print!("{:N<2$}{}", "", record.seq(), w);
+                }
+            }
+            println!();
+        }else if reform.starts_with("split"){
+            let w: usize = reform.strip_prefix("split").unwrap().parse().unwrap();
+            if w == 0 { return };
+            let re = Regex::new(&format!("(?i)N{{{w},}}", w=w)).unwrap();
+            while let Some(record) = records.iter_record().unwrap() {
+                let mut last_pos = 0;
+                let len = record.len();
+                let seq = record.seq();
+                for mat in re.find_iter(seq) {
+                    println!(">{}:{}_{}\n{}", record.head(), last_pos, mat.start() - 1, 
+                        &seq[last_pos..mat.start()]);
+                    last_pos = mat.end();
+                }
+                if len > last_pos {
+                    if last_pos == 0{
+                        println!(">{}\n{}", record.head(), &seq[last_pos..len]);
+                    }else{
+                        println!(">{}:{}_{}\n{}", record.head(), last_pos, len - 1, &seq[last_pos..len]);
+                    }
+                }
+            }
+        }else{
+            panic!("unknown values: {} for --reform", reform);
+        }
+
+    }else if let Some(subarg) = args.subcommand_matches("findseq"){
         let subseq = subarg.value_of("subseq").unwrap();
         let re = if subarg.is_present("ignore-case") {
             Regex::new(format!("(?i){}", subseq).as_str()).unwrap()
@@ -481,7 +606,7 @@ fn main() {
                 println!("{}\t{}\t{}", record.head(), mat.start(), mat.end() - 1);
             }
         }
-    }else if let Some(subarg) = args.subcommand_matches("findGap"){
+    }else if let Some(subarg) = args.subcommand_matches("findgap"){
         let min_len = Byte::from_str(subarg.value_of("min_len").unwrap()).unwrap().get_bytes();
         let re = Regex::new(r"(?i)N+").unwrap();
         while let Some(record) = records.iter_record().unwrap() {
@@ -491,7 +616,7 @@ fn main() {
                 }
             }
         }
-    }else if let Some(subarg) = args.subcommand_matches("getSeq"){
+    }else if let Some(subarg) = args.subcommand_matches("getseq"){
         let region = subarg.value_of("region").unwrap();
         let path = Path::new(region);
         let mut out_info: HashMap<String, Vec<(u32, u32)>> = HashMap::new();
@@ -510,14 +635,16 @@ fn main() {
                 }
             }
         }else{
-            let re = Regex::new(r"(?i)(\S+)[:-](start|\d+)[:-](end|\d+)$").unwrap();
-            if let Some(caps) = re.captures(region){
-                let chr = caps.get(1).unwrap().as_str();
-                let start = caps.get(2).unwrap().as_str().parse::<u32>().unwrap_or(0);
-                let end = caps.get(3).unwrap().as_str().parse::<u32>().unwrap_or(0);
-                out_info.insert(chr.to_owned(), vec![(start, end)]);
-            }else{
-                out_info.insert(region.to_owned(), vec![(0, 0)]);
+            for region in region.split(&[',', ';'][..]){
+                let re = Regex::new(r"(?i)(\S+)[:-](start|\d+)[:-](end|\d+)$").unwrap();
+                if let Some(caps) = re.captures(region){
+                    let chr = caps.get(1).unwrap().as_str();
+                    let start = caps.get(2).unwrap().as_str().parse::<u32>().unwrap_or(0);
+                    let end = caps.get(3).unwrap().as_str().parse::<u32>().unwrap_or(0);
+                    out_info.insert(chr.to_owned(), vec![(start, end)]);
+                }else{
+                    out_info.insert(region.to_owned(), vec![(0, 0)]);
+                }
             }
         }
         while let Some(record) = records.iter_record().unwrap() {
@@ -547,6 +674,7 @@ fn main() {
                 }
             }
             out_info.remove(head);
+            if out_info.is_empty() {break;}
         }
         for (key, _) in out_info.iter() {
             eprintln!("Missing record: {}", key);
@@ -615,14 +743,6 @@ fn main() {
            out_stat_with_ctg(&lens, total, &ctg_lens, ctg_total, &gap_lens, gap_total, genome_len as usize);
         }else{
             out_stat(&lens, total);
-        }
-    }else if let Some(subarg) = args.subcommand_matches("fq2fa") {
-        let min_len = Byte::from_str(subarg.value_of("min_len").unwrap()).unwrap().get_bytes();
-        while let Some(record) = records.iter_record().unwrap() {
-            if record.len() < min_len as usize {
-                continue;
-            }
-            println!(">{} {}\n{}", record.head(), record.des(), record.seq());
         }
     }
 }
