@@ -33,7 +33,7 @@ impl NX {
         for pos in (0..lens.len()).rev() {
             acc += lens[pos] as usize;
             self.count[i] += 1;
-            if acc as f64 > ((i + 1) * total) as f64 * 0.1 {
+            while acc as f64 > ((i + 1) * total) as f64 * 0.1 {
                 self.len[i] = lens[pos];
                 i += 1;
                 if i >= 10 {
@@ -112,7 +112,7 @@ fn out_stat(lens: &[u32], total: usize) {
         }
         accumulate += lens[total_count - 1 - pos] as usize;
         stat.count[stat_i] += 1;
-        if accumulate as f64 > ((stat_i + 1) * total) as f64 * 0.1 {
+        while accumulate as f64 > ((stat_i + 1) * total) as f64 * 0.1 {
             stat.len[stat_i] = lens[total_count - 1 - pos];
             stat_i += 1;
             stat.count[stat_i] += stat.count[stat_i - 1];
@@ -344,13 +344,22 @@ fn main() {
                     reform/modify the sequence, accept values:
                       lower: convert sequences into lowercase
                       upper: convert sequences into uppercase
-                      lineINT: wrap sequences into INT characters per line, 0 for no wrap
+                      lineINT: wrap sequences into INT characters per line,
+                        0 for no wrap
                       linkINT: link sequences with INT Ns
                       splitINT: split sequences at Ns with length >= INT
                       fq2fa: converts FASTQ to FASTA
                       fa2fq: converts FASTA to FASTQ"
                 })
                 .takes_value(true)
+        )
+        .arg(
+            Arg::new("subsample")
+                .short('s')
+                .long("sample~")
+                .value_name("int[G|M|K]|float")
+                .about("subsample reads, int is the total bases, float is the fraction")
+                .takes_value(true),
         )
         .subcommand(
             App::new("stat")
@@ -359,7 +368,7 @@ fn main() {
                     Arg::new("min_len")
                         .short('m')
                         .long("min_len")
-                        .value_name("STR")
+                        .value_name("int[G|M|K]")
                         .default_value("0")
                         .about("minimum sequence length, shorter sequences are ignored")
                         .takes_value(true),
@@ -368,7 +377,7 @@ fn main() {
                     Arg::new("n_len")
                         .short('n')
                         .long("n_len")
-                        .value_name("INT")
+                        .value_name("int[G|M|K]")
                         .default_value("0")
                         .about("minimum gap (N) length, 0 means do not stat contig length")
                         .takes_value(true),
@@ -377,7 +386,7 @@ fn main() {
                     Arg::new("genome_len")
                         .short('g')
                         .long("genome_len")
-                        .value_name("INT")
+                        .value_name("int[G|M|K]")
                         .default_value("0")
                         // .requires("n_len")
                         .about("genome size, 0 means calculate genome size using the input file, co-used with -n")
@@ -416,7 +425,7 @@ fn main() {
                 Arg::new("min_len")
                     .short('m')
                     .long("min_len")
-                    .value_name("STR")
+                    .value_name("int[G|M|K]")
                     .default_value("0")
                     .about("minimum gap length, shorter gaps are ignored")
                     .takes_value(true),
@@ -449,7 +458,7 @@ fn main() {
                 )
         )
         .subcommand(
-            App::new("diff")
+            App::new("diff~")
                 .about("compare sequences between files")
                 .arg(
                     Arg::new("base")
@@ -686,7 +695,7 @@ fn main() {
         let mut lens = Vec::with_capacity(1024);
         let mut total: usize = 0;
 
-        let re = Regex::new(r"(?i)N+").unwrap();
+        let re = Regex::new(&format!("(?i)N{{{w},}}", w=n_len)).unwrap();
         let mut ctg_lens = Vec::with_capacity(1024);
         let mut ctg_total: usize = 0;
 
@@ -712,20 +721,17 @@ fn main() {
                 let mut ctg_count = 1;
                 let seq = record.seq();
                 for mat in re.find_iter(seq) {
-                    // println!("{} {} {}",record.head(), mat.start(), mat.end());
-                    if mat.end() - mat.start() >= n_len as usize {
-                        if mat.start() > last_pos {
-                            ctg_lens.push((mat.start() - last_pos) as u32);
-                            ctg_total += mat.start() - last_pos;
-                            if let Some(ref mut file) = ctg_file {
-                                writeln!(file, ">{}_ctg{}\n{}", record.head(), ctg_count, &seq[last_pos..mat.start()]).unwrap();
-                                ctg_count += 1;
-                            }
+                    if mat.start() > last_pos {
+                        ctg_lens.push((mat.start() - last_pos) as u32);
+                        ctg_total += mat.start() - last_pos;
+                        if let Some(ref mut file) = ctg_file {
+                            writeln!(file, ">{}_ctg{}\n{}", record.head(), ctg_count, &seq[last_pos..mat.start()]).unwrap();
+                            ctg_count += 1;
                         }
-                        gap_lens.push((mat.end() - mat.start()) as u32);
-                        gap_total += mat.end() - mat.start();
-                        last_pos = mat.end();
                     }
+                    gap_lens.push((mat.end() - mat.start()) as u32);
+                    gap_total += mat.end() - mat.start();
+                    last_pos = mat.end();
                 }
                 if len > last_pos {
                     ctg_lens.push((len - last_pos) as u32);
