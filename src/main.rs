@@ -1,5 +1,5 @@
 use byte_unit::Byte;
-use clap::{crate_version, App, AppSettings, Arg, crate_name};
+use clap::{App, AppSettings, Arg, crate_name};
 use hashbrown::HashMap;
 use kseq::parse_path;
 // use lazy_static::lazy_static;
@@ -7,6 +7,8 @@ use regex::Regex;
 use indoc::indoc;
 use std::path::Path;
 use std::{cmp::max, fmt, fs::File, io::{BufReader, BufRead, Write}};
+
+pub const VERSION: &'static str = include_str!(concat!(env!("OUT_DIR"), "/VERSION"));
 
 #[derive(Default)]
 struct NX {
@@ -308,7 +310,8 @@ fn out_seq(seq: &str, reverse: bool, complement: bool){
 
 fn main() {
     let args = App::new("fastx")
-        .version(crate_version!())
+        // .version(crate_version!())
+        .version(VERSION)
         .about("A toolset for processing sequences in FASTA/Q formats")
         .override_usage(format!("{} [SUBCOMMAND] [OPTIONS] <input>", crate_name!()).as_str())
         .global_setting(AppSettings::ArgRequiredElseHelp)
