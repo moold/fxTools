@@ -14,6 +14,7 @@ regex = "1"
 lazy_static = "1.4.0"
 hashbrown = "0.11"
 indoc = "1.0"
+owo-colors = "3"
 
 [profile.release]
 # debug = true
