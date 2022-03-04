@@ -327,17 +327,31 @@ fn complement_base(b: char) -> char {
     }
 }
 
-fn out_seq(seq: &str, reverse: bool, complement: bool) {
+fn out_seq(seq: &str, qual:&str, reverse: bool, complement: bool) {
     if complement && reverse {
         seq.chars()
             .rev()
             .for_each(|b| print!("{}", complement_base(b)));
+
+        if !qual.is_empty(){
+            print!("\n+\n{}", qual.chars().rev().collect::<String>());
+        }
     } else if complement {
         seq.chars().for_each(|b| print!("{}", complement_base(b)));
+        if !qual.is_empty(){
+            print!("\n+\n{}", qual);
+        }
     } else if reverse {
         seq.chars().rev().for_each(|b| print!("{}", b));
+
+        if !qual.is_empty(){
+            print!("\n+\n{}", qual.chars().rev().collect::<String>());
+        }
     } else {
         print!("{}", seq);
+        if !qual.is_empty(){
+            print!("\n+\n{}", qual);
+        }
     }
     println!();
 }
@@ -825,6 +839,7 @@ fn main() {
             let head = record.head();
             if let Some(regions) = out_info.get_mut(head) {
                 let seqs = record.seq();
+                let qual = record.qual();
                 for (start, end) in regions.iter_mut() {
                     let mut sub_head: String;
                     if start == end {
@@ -843,9 +858,18 @@ fn main() {
                     if subarg.is_present("complement") {
                         sub_head += "_com";
                     }
-                    println!(">{}", sub_head);
+                    if qual.is_empty(){
+                        println!(">{}", sub_head);
+                    }else{
+                        println!("@{}", sub_head);
+                    }
                     out_seq(
                         &seqs[*start as usize..*end as usize],
+                        if qual.is_empty(){
+                            qual
+                        }else{
+                            &qual[*start as usize..*end as usize]
+                        },
                         subarg.is_present("reverse"),
                         subarg.is_present("complement"),
                     );
