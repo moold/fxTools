@@ -1,286 +1,33 @@
 use byte_unit::Byte;
 use clap::{crate_name, App, AppSettings, Arg};
 use hashbrown::HashMap;
-use kseq::parse_path;
-// use lazy_static::lazy_static;
+use kseq::{parse_path, record::Fastx};
 use indoc::indoc;
 use owo_colors::OwoColorize;
 use regex::Regex;
-use std::path::Path;
 use std::{
     cmp::max,
     fmt,
     fs::File,
     io::{BufRead, BufReader, Write},
+    path::Path
 };
+
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
+mod utils;
+use utils::stat::stat;
 
 pub const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/VERSION"));
 
-#[derive(Default)]
-struct NX {
-    count: [usize; 10],
-    len: [u32; 10],
-}
-
-impl NX {
-    fn get_width(&self) -> (usize, usize) {
-        let mut width1 = self.count[8].to_string().len();
-        let mut width2 = self.len[0].to_string().len();
-        if width1 < 9 {
-            width1 = 9;
-        }
-        if width2 < 11 {
-            width2 = 11;
-        }
-        (width1, width2)
-    }
-
-    fn fill_data(&mut self, lens: &[u32], total: usize) {
-        let mut i = 0;
-        let mut acc = 0;
-        for pos in (0..lens.len()).rev() {
-            acc += lens[pos] as usize;
-            self.count[i] += 1;
-            while acc as f64 > ((i + 1) * total) as f64 * 0.1 {
-                self.len[i] = lens[pos];
-                i += 1;
-                if i >= 10 {
-                    break;
-                }
-                self.count[i] += self.count[i - 1];
-            }
-        }
-    }
-}
-
-impl fmt::Display for NX {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (width1, width2) = self.get_width();
-        writeln!(
-            f,
-            "{:<5} {:^width1$} {:^width2$}",
-            "Types",
-            "Count (#)",
-            "Length (bp)",
-            width1 = width1,
-            width2 = width2
-        )?;
-        for i in 0..9 {
-            writeln!(
-                f,
-                "N{:<4} {:^width1$} {:^width2$}",
-                (i + 1) * 10,
-                self.count[i],
-                self.len[i],
-                width1 = width1,
-                width2 = width2
-            )?;
-        }
-        Ok(())
-    }
-}
-
-fn out_stat(lens: &[u32], total: usize) {
-    let total_count = lens.len();
-    let bin = max(total_count / 200, 10);
-    let bin_step = max(10, lens[total_count / 2] / 20) as usize;
-    let mut bin_index: usize = max(lens[0] as usize / bin_step, 1);
-    let mut bin_count: usize = 0;
-
-    let mut stat: NX = Default::default();
-    let mut stat_i = 0;
-    let mut accumulate: usize = 0;
-
-    println!("[length histogram ('*' =~ {:?} reads)]", bin);
-    for (pos, len) in lens.iter().enumerate() {
-        if (*len as usize) < bin_step * bin_index || total_count - 1 - pos < bin << 1 {
-            bin_count += 1;
-        } else {
-            loop {
-                if bin_count > 0 {
-                    println!(
-                        "{:>width1$} {:>width1$} {:>width2$} {:*>width3$}",
-                        bin_step * (bin_index - 1),
-                        bin_step * bin_index - 1,
-                        bin_count,
-                        "",
-                        width1 = lens.last().unwrap_or(&0).to_string().len(),
-                        width2 = total_count.to_string().len(),
-                        width3 = bin_count / bin
-                    );
-                }
-                bin_count = 0;
-                bin_index += 1;
-                if (*len as usize) < bin_step * bin_index {
-                    //check <= or <
-                    bin_count = 1;
-                    break;
-                }
-            }
-        }
-        accumulate += lens[total_count - 1 - pos] as usize;
-        stat.count[stat_i] += 1;
-        while accumulate as f64 > ((stat_i + 1) * total) as f64 * 0.1 {
-            stat.len[stat_i] = lens[total_count - 1 - pos];
-            stat_i += 1;
-            stat.count[stat_i] += stat.count[stat_i - 1];
-        }
-    }
-
-    println!(
-        "{:>width1$} {:>width1$} {:>width2$} {:*>width3$}",
-        bin_step * (bin_index - 1),
-        bin_step * bin_index - 1,
-        bin_count,
-        "",
-        width1 = lens.last().unwrap_or(&0).to_string().len(),
-        width2 = total_count.to_string().len(),
-        width3 = bin_count / bin
-    );
-
-    println!("\n\n[length stat]\n{}", stat);
-    let (stat_width1, stat_width2) = stat.get_width();
-    println!(
-        "{:<5} {:^width1$} {:^width2$}",
-        "Min.",
-        "-",
-        lens[0],
-        width1 = stat_width1,
-        width2 = stat_width2
-    );
-    println!(
-        "{:<5} {:^width1$} {:^width2$}",
-        "Max.",
-        "-",
-        lens[total_count - 1],
-        width1 = stat_width1,
-        width2 = stat_width2
-    );
-    println!(
-        "{:<5} {:^width1$} {:^width2$}",
-        "Ave.",
-        "-",
-        total / total_count,
-        width1 = stat_width1,
-        width2 = stat_width2
-    );
-    println!(
-        "{:<5} {:^width1$} {:^width2$}",
-        "Total",
-        total_count,
-        total,
-        width1 = stat_width1,
-        width2 = stat_width2
-    );
-}
-
-fn count_by_min(lens: &[u32], min: u32) -> (usize, usize) {
-    let mut count = 0;
-    let mut total = 0;
-    for len in lens {
-        if *len >= min {
-            count += 1;
-            total += *len;
-        }
-    }
-    (total as usize, count)
-}
-
-fn out_stat_with_ctg(
-    lens: &[u32],
-    total: usize,
-    ctg_lens: &[u32],
-    ctg_total: usize,
-    gap_lens: &[u32],
-    gap_total: usize,
-    genome_len: usize,
-) {
-    let mut stat: NX = Default::default();
-    let mut ctg_stat: NX = Default::default();
-    let mut gap_stat: NX = Default::default();
-    stat.fill_data(lens, if genome_len > 0 { genome_len } else { total });
-    ctg_stat.fill_data(
-        ctg_lens,
-        if genome_len > 0 {
-            genome_len
-        } else {
-            ctg_total
-        },
-    );
-    gap_stat.fill_data(gap_lens, gap_total);
-
-    println!("{:=<7}{:=^26}{:=^26}{:=^25}", "", "", "", "");
-    println!(
-        "{:<7}{:^26}{:^26}{:^25}",
-        "Types", "Scaffold", "Contig", "Gap"
-    );
-    println!(
-        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-        "", "Length (bp)", "Count (#)", "Length (bp)", "Count (#)", "Length (bp)", "Count (#)"
-    );
-    println!("{:-<7}{:-^26}{:-^26}{:-^25}", "", "", "", "");
-    for i in 0..9 {
-        println!(
-            "N{:<6}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-            (i + 1) * 10,
-            stat.len[i],
-            stat.count[i],
-            ctg_stat.len[i],
-            ctg_stat.count[i],
-            gap_stat.len[i],
-            gap_stat.count[i],
-        );
-    }
-    println!(
-        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-        "Longest",
-        lens.last().unwrap_or(&0),
-        1,
-        ctg_lens.last().unwrap_or(&0),
-        1,
-        gap_lens.last().unwrap_or(&0),
-        if gap_lens.is_empty() { 0 } else { 1 },
-    );
-    println!(
-        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-        "Total",
-        total,
-        lens.len(),
-        ctg_total,
-        ctg_lens.len(),
-        gap_total,
-        gap_lens.len(),
-    );
-    let (len_total, len_count) = count_by_min(lens, 10000);
-    let (ctg_total, ctg_count) = count_by_min(ctg_lens, 10000);
-    let (gap_total, gap_count) = count_by_min(gap_lens, 10000);
-    println!(
-        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-        ">=10kb", len_total, len_count, ctg_total, ctg_count, gap_total, gap_count
-    );
-    let (len_total, len_count) = count_by_min(lens, 100000);
-    let (ctg_total, ctg_count) = count_by_min(ctg_lens, 100000);
-    let (gap_total, gap_count) = count_by_min(gap_lens, 100000);
-    println!(
-        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-        ">=100kb", len_total, len_count, ctg_total, ctg_count, gap_total, gap_count
-    );
-    let (len_total, len_count) = count_by_min(lens, 1000000);
-    let (ctg_total, ctg_count) = count_by_min(ctg_lens, 1000000);
-    let (gap_total, gap_count) = count_by_min(gap_lens, 1000000);
-    println!(
-        "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
-        ">=1mb", len_total, len_count, ctg_total, ctg_count, gap_total, gap_count
-    );
-    println!("{:=<7}{:=^26}{:=^26}{:=^25}", "", "", "", "");
-}
-
 fn out_attr(
-    head: &str,
-    len: usize,
+    record: Fastx,
     attr: &str,
     attr_lower: &str,
-    letter_counts: &HashMap<u8, usize>,
 ) {
     let mut is_first = true;
     let mut s = 0;
@@ -293,11 +40,22 @@ fn out_attr(
             s += 1;
         }
         match elm {
-            //TODO change to use attr
-            "id" => print!("{}", head),
-            "len" => print!("{}", len),
+            "id" => print!("{}", record.head()),
+            "len" => print!("{}", record.len()),
+            "qs" => {
+                let qual = record.qual();
+                if !qual.is_empty() {
+                     // \text{read Q} = -10\log_{10}\big[\tfrac{1}{N}\sum 10^{-q_i/10}\big]
+                    let e_sum: f64 = qual.as_bytes().iter().map(|x| 10_f64.powf(- 0.1 * (x - 33) as f64)).sum();
+                    print!("{}", -10.0 * (e_sum/record.len() as f64).log10());
+                }else {
+                    print!("NA");
+                }
+            }
             "" => (),
             _ => {
+                let mut letter_counts: HashMap<u8, usize> = HashMap::with_capacity(10);
+                record.seq().as_bytes().iter().for_each(|c| *letter_counts.entry(*c).or_insert(0) += 1);
                 let x = &attr[s..s + elm.len()];
                 print!(
                     "{}",
@@ -400,7 +158,8 @@ fn main() {
                     get sequence attributes, id:len:x
                       len: sequences length
                       x:   count x, case sensitive, where x can be a single base
-                           or multiple bases (gcGC means count g + c + G + C)."
+                           or multiple bases (gcGC means count g + c + G + C)
+                      qs:  quality score"
                     })
                 .takes_value(true),
         )
@@ -541,39 +300,12 @@ fn main() {
         .get_matches();
 
     let path: Option<String> = args.value_of("input").map(str::to_string);
-    let mut records = parse_path(path).unwrap();
+    let mut records = parse_path(path.to_owned()).unwrap();
     if let Some(attr) = args.value_of("attr") {
         let attr = attr.trim_matches(':');
         let attr_lower = attr.to_ascii_lowercase();
-        let is_total = !attr_lower.contains("id");
-        let mut total_len = 0;
-        let need_count = attr_lower.split(':').any(|x| x != "id" && x != "len");
-        let mut letter_counts: HashMap<u8, usize> = HashMap::with_capacity(10);
         while let Some(record) = records.iter_record().unwrap() {
-            if need_count {
-                record
-                    .seq()
-                    .as_bytes()
-                    .iter()
-                    .for_each(|c| *letter_counts.entry(*c).or_insert(0) += 1);
-            }
-
-            if !is_total {
-                out_attr(
-                    record.head(),
-                    record.len(),
-                    attr,
-                    &attr_lower,
-                    &letter_counts,
-                );
-                letter_counts.clear();
-            } else {
-                total_len += record.len();
-            }
-        }
-
-        if is_total {
-            out_attr("Total", total_len, attr, &attr_lower, &letter_counts);
+            out_attr(record, attr, &attr_lower);
         }
     } else if let Some(reform) = args.value_of("reform") {
         let reform = reform.to_ascii_lowercase();
@@ -829,9 +561,9 @@ fn main() {
                     let chr = caps.get(1).unwrap().as_str();
                     let start = caps.get(2).unwrap().as_str().parse::<u32>().unwrap_or(0);
                     let end = caps.get(3).unwrap().as_str().parse::<u32>().unwrap_or(0);
-                    out_info.insert(chr.to_owned(), vec![(start, end)]);
+                    out_info.entry(chr.to_owned()).or_insert(vec![]).push((start, end));
                 } else {
-                    out_info.insert(region.to_owned(), vec![(0, 0)]);
+                    out_info.entry(region.to_owned()).or_insert(vec![]).push((0, 0));
                 }
             }
         }
@@ -886,95 +618,13 @@ fn main() {
     } else if let Some(subarg) = args.subcommand_matches("stat") {
         let min_len = Byte::from_str(subarg.value_of("min_len").unwrap())
             .unwrap()
-            .get_bytes();
+            .get_bytes() as usize;
         let genome_len = Byte::from_str(subarg.value_of("genome_len").unwrap())
             .unwrap()
-            .get_bytes();
+            .get_bytes() as usize;
         let n_len = Byte::from_str(subarg.value_of("n_len").unwrap())
             .unwrap()
-            .get_bytes();
-        let mut lens = Vec::with_capacity(1024);
-        let mut total: usize = 0;
-
-        let re = Regex::new(&format!("(?i)N{{{w},}}", w = n_len)).unwrap();
-        let mut ctg_lens = Vec::with_capacity(1024);
-        let mut ctg_total: usize = 0;
-
-        let mut gap_lens = Vec::with_capacity(1024);
-        let mut gap_total: usize = 0;
-
-        let mut ctg_file = if subarg.is_present("out_ctg") {
-            let file = args.value_of("input").unwrap().to_owned() + ".ctg.fa";
-            Some(
-                File::create(file.to_owned())
-                    .unwrap_or_else(|_| panic!("failed create file: {}", file)),
-            )
-        } else {
-            None
-        };
-        while let Some(record) = records.iter_record().unwrap() {
-            let len = record.len();
-            if len < min_len as usize {
-                continue;
-            }
-            lens.push(len as u32);
-            total += len;
-
-            if n_len > 0 {
-                let mut last_pos = 0;
-                let mut ctg_count = 1;
-                let seq = record.seq();
-                for mat in re.find_iter(seq) {
-                    if mat.start() > last_pos {
-                        ctg_lens.push((mat.start() - last_pos) as u32);
-                        ctg_total += mat.start() - last_pos;
-                        if let Some(ref mut file) = ctg_file {
-                            writeln!(
-                                file,
-                                ">{}_ctg{}\n{}",
-                                record.head(),
-                                ctg_count,
-                                &seq[last_pos..mat.start()]
-                            )
-                            .unwrap();
-                            ctg_count += 1;
-                        }
-                    }
-                    gap_lens.push((mat.end() - mat.start()) as u32);
-                    gap_total += mat.end() - mat.start();
-                    last_pos = mat.end();
-                }
-                if len > last_pos {
-                    ctg_lens.push((len - last_pos) as u32);
-                    ctg_total += len - last_pos;
-                    if let Some(ref mut file) = ctg_file {
-                        writeln!(
-                            file,
-                            ">{}_ctg{}\n{}",
-                            record.head(),
-                            ctg_count,
-                            &seq[last_pos..len]
-                        )
-                        .unwrap();
-                    }
-                }
-            }
-        }
-        lens.sort_unstable();
-        if n_len > 0 {
-            ctg_lens.sort_unstable();
-            gap_lens.sort_unstable();
-            out_stat_with_ctg(
-                &lens,
-                total,
-                &ctg_lens,
-                ctg_total,
-                &gap_lens,
-                gap_total,
-                genome_len as usize,
-            );
-        } else {
-            out_stat(&lens, total);
-        }
+            .get_bytes() as usize;
+        stat(&[&path.unwrap()], min_len, genome_len, n_len, subarg.is_present("out_ctg"));
     }
 }

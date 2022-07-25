@@ -2,12 +2,13 @@
 name = "bioTools"
 version = "0.1.0"
 authors = ["Moold <mooldhu@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kseq = "0.2.7"
+atty = "0.2"
+kseq = "0.3"
 clap = "3.0.0-beta.2"
 byte-unit = "4.0.12"
 regex = "1"
@@ -15,6 +16,15 @@ lazy_static = "1.4.0"
 hashbrown = "0.11"
 indoc = "1.0"
 owo-colors = "3"
+rayon = "1.5"
+crossbeam-utils = "0.8"
+crossbeam-channel = "0.5"
+flate2 = { version = ">=1.0.17", features = ["zlib-ng-compat"], default-features = false }
+memchr = "2.4"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.5"
 
 [profile.release]
-# debug = true
+strip = "debuginfo"
+
