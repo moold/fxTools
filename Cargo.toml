@@ -1,5 +1,5 @@
 [package]
-name = "bioTools"
+name = "fxTools"
 version = "0.1.0"
 authors = ["Moold <mooldhu@gmail.com>"]
 edition = "2021"
@@ -9,9 +9,9 @@ edition = "2021"
 [dependencies]
 atty = "0.2"
 kseq = "0.3"
-clap = "3.0.0-beta.2"
+clap = { version = "3.2", features = ["cargo"] }
 byte-unit = "4.0.12"
-regex = "1"
+regex = "1.6"
 lazy_static = "1.4.0"
 hashbrown = "0.11"
 indoc = "1.0"
@@ -21,6 +21,7 @@ crossbeam-utils = "0.8"
 crossbeam-channel = "0.5"
 flate2 = { version = ">=1.0.17", features = ["zlib-ng-compat"], default-features = false }
 memchr = "2.4"
+rand = { version = "0.8.5", features = ["alloc"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = "0.5"

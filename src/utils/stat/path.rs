@@ -1,7 +1,5 @@
 use flate2::read::MultiGzDecoder;
 use std::{
-    cmp::max,
-    fmt,
     fs::File,
     io::{stdin, BufRead, BufReader, Cursor, Read},
     path::Path,
