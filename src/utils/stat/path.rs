@@ -7,8 +7,8 @@ use std::{
 
 //convert path to Read, accept auguments: file.txt/file.gz/file.fofn
 pub fn open_path<T>(path: T) -> Vec<Box<dyn Read>>
-    where
-        T: AsRef<str>,
+where
+    T: AsRef<str>,
 {
     let mut readers = Vec::new();
     let path = path.as_ref();

@@ -1,9 +1,9 @@
+use super::common::{print_fx, print_seq};
 use kseq::{parse_path, record::Fastx};
 use owo_colors::OwoColorize;
 use regex::Regex;
-use super::common::{out_seq, out_fx};
 
-fn lower(r: Fastx){
+fn lower(r: Fastx) {
     if r.sep().is_empty() {
         println!(
             ">{} {}\n{}",
@@ -23,7 +23,7 @@ fn lower(r: Fastx){
     }
 }
 
-fn upper(r: Fastx){
+fn upper(r: Fastx) {
     if r.sep().is_empty() {
         println!(
             ">{} {}\n{}",
@@ -44,13 +44,14 @@ fn upper(r: Fastx){
 }
 
 fn wrapc(path: &str) {
-
     fn out_cbase<T: Into<char>>(b: T, cs: &[i32; 6]) {
         let b = b.into();
         let c: i32 = cs.iter().sum();
-        if c <= 1 { // only one base
+        if c <= 1 {
+            // only one base
             print!("{}", b)
-        } else { // SNPs or INDELs
+        } else {
+            // SNPs or INDELs
             match b {
                 'a' | 'A' => print!("{}", b.bold().underline().green()),
                 't' | 'T' => print!("{}", b.bold().underline().red()),
@@ -98,7 +99,7 @@ fn wrapc(path: &str) {
     }
 }
 
-fn split(r: Fastx, re: &Regex){
+fn split(r: Fastx, re: &Regex) {
     let mut last_pos = 0;
     let (seq, len) = (r.seq(), r.len());
     for mat in re.find_iter(seq) {
@@ -127,8 +128,7 @@ fn split(r: Fastx, re: &Regex){
 }
 
 pub fn reform(paths: &[&str], reform: &str) {
-
-    for path in paths{
+    for path in paths {
         let mut records = parse_path(*path).unwrap();
 
         if reform == "lower" {
@@ -167,7 +167,7 @@ pub fn reform(paths: &[&str], reform: &str) {
                 wrapc(*path);
             } else {
                 while let Ok(Some(record)) = records.iter_record() {
-                    out_fx(record, w);
+                    print_fx(record, w);
                 }
             }
         } else if reform.starts_with("link") {
@@ -192,25 +192,25 @@ pub fn reform(paths: &[&str], reform: &str) {
             while let Ok(Some(record)) = records.iter_record() {
                 split(record, &re);
             }
-        }else if ["rev", "com", "rc"].contains(&reform){
-            let (rev, com) = if reform == "rev"{
+        } else if ["rev", "com", "rc"].contains(&reform) {
+            let (rev, com) = if reform == "rev" {
                 (true, false)
-            }else if reform == "com"{
+            } else if reform == "com" {
                 (false, true)
-            }else{
+            } else {
                 (true, true)
             };
             while let Ok(Some(record)) = records.iter_record() {
                 if record.sep().is_empty() {
                     println!(">{} {}", record.head(), record.des());
-                }else {
+                } else {
                     println!("@{} {}", record.head(), record.des());
                 }
-                out_seq(record.seq(), rev, com);
+                print_seq(record.seq(), rev, com);
                 if !record.sep().is_empty() {
                     println!("{}", record.sep());
-                    out_seq(record.qual(), rev, false); 
-               }
+                    print_seq(record.qual(), rev, false);
+                }
             }
         } else {
             panic!("unknown values: {} for --reform", reform);

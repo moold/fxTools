@@ -7,8 +7,8 @@ use std::{cmp::max, fmt, fs::File, io::Write};
 
 mod io;
 mod path;
-use path::open_path;
 use io::Buffer;
+use path::open_path;
 
 const BUF_COUNT: usize = 2;
 
@@ -161,7 +161,8 @@ fn out_stat(lens: &[u32], total: usize, genome_len: usize) {
             His::new(lens[dev], lens[total_count - max(1, dev)], total_count).fill(lens)
         });
 
-        let nx = work.spawn(move |_| Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total }));
+        let nx = work
+            .spawn(move |_| Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total }));
         (
             hist.join().expect("Failed to generate histogram!"),
             nx.join().expect("Failed to generate Nx stats!"),
@@ -183,19 +184,41 @@ fn out_stat(lens: &[u32], total: usize, genome_len: usize) {
     println!("{:<5} {:^sw1$} {:^sw2$}", "Total", total_count, total,);
 }
 
-fn out_stats(lens: &[u32], total: usize, ctg_lens: &[u32], ctg_total: usize, gap_lens: &[u32], gap_total: usize, genome_len: usize){
-
-    let acc_min = |lens: &[u32], min| lens.iter().filter(|&&x| x >= min).fold((0, 0), |acc, x| (acc.0 + 1, acc.1 + x));
+fn out_stats(
+    lens: &[u32],
+    total: usize,
+    ctg_lens: &[u32],
+    ctg_total: usize,
+    gap_lens: &[u32],
+    gap_total: usize,
+    genome_len: usize,
+) {
+    let acc_min = |lens: &[u32], min| {
+        lens.iter()
+            .filter(|&&x| x >= min)
+            .fold((0, 0), |acc, x| (acc.0 + 1, acc.1 + x))
+    };
     let (nx, ctg_nx, gap_nx) = thread::scope(|work| {
-       let nx = work.spawn(move |_| Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total }));
-       let ctg_nx = work.spawn(move |_| Nx::new().fill(ctg_lens, if genome_len > 0 { genome_len } else{ ctg_total }));
-       let gap_nx = work.spawn(move |_| Nx::new().fill(gap_lens, gap_total));
-       (
+        let nx = work
+            .spawn(move |_| Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total }));
+        let ctg_nx = work.spawn(move |_| {
+            Nx::new().fill(
+                ctg_lens,
+                if genome_len > 0 {
+                    genome_len
+                } else {
+                    ctg_total
+                },
+            )
+        });
+        let gap_nx = work.spawn(move |_| Nx::new().fill(gap_lens, gap_total));
+        (
             nx.join().expect("Failed to generate Nx stats!"),
             ctg_nx.join().expect("Failed to generate ctg_Nx stats!"),
-            gap_nx.join().expect("Failed to generate gap_Nx stats!")
+            gap_nx.join().expect("Failed to generate gap_Nx stats!"),
         )
-    }).unwrap();
+    })
+    .unwrap();
 
     println!("{:=<7}{:=^26}{:=^26}{:=^25}", "", "", "", "");
     println!(
@@ -240,7 +263,7 @@ fn out_stats(lens: &[u32], total: usize, ctg_lens: &[u32], ctg_total: usize, gap
         gap_lens.len(),
     );
 
-    for min_len in [10000, 100000, 1000000]{
+    for min_len in [10000, 100000, 1000000] {
         let (len_total, len_count) = acc_min(lens, min_len);
         let (ctg_total, ctg_count) = acc_min(ctg_lens, min_len);
         let (gap_total, gap_count) = acc_min(gap_lens, min_len);
@@ -248,18 +271,23 @@ fn out_stats(lens: &[u32], total: usize, ctg_lens: &[u32], ctg_total: usize, gap
             "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
             if min_len == 1000000 {
                 ">=1mb"
-            }else if min_len == 100000{
+            } else if min_len == 100000 {
                 ">=100kb"
-            }else {
+            } else {
                 ">=10kb"
             },
-            len_total, len_count, ctg_total, ctg_count, gap_total, gap_count
+            len_total,
+            len_count,
+            ctg_total,
+            ctg_count,
+            gap_total,
+            gap_count
         );
     }
     println!("{:=<7}{:=^26}{:=^26}{:=^25}", "", "", "", "");
 }
 
-fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> (usize, Vec<u32>){
+fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> (usize, Vec<u32>) {
     // exit if any thread panics
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |v| {
@@ -440,7 +468,8 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
     let mut gap_total: usize = 0;
 
     for infile in infiles {
-        let mut records = parse_path(*infile).unwrap_or_else(|_| panic!("failed read file file: {}", infile));
+        let mut records =
+            parse_path(*infile).unwrap_or_else(|_| panic!("failed read file file: {}", infile));
         let out = out_ctg.then(|| {
             let out = infile.to_string() + ".ctg.fa";
             File::create(&out).unwrap_or_else(|_| panic!("failed create file: {}", out))
@@ -467,7 +496,8 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
                             record.head(),
                             ctg_count,
                             &seq[last_pos..mat.start()]
-                        ).unwrap();
+                        )
+                        .unwrap();
                         ctg_count += 1;
                     }
                 }
@@ -485,7 +515,8 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
                         record.head(),
                         ctg_count,
                         &seq[last_pos..len]
-                    ).unwrap();
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -493,13 +524,7 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
         ctg_lens.par_sort_unstable();
         gap_lens.par_sort_unstable();
         out_stats(
-            &lens,
-            total,
-            &ctg_lens,
-            ctg_total,
-            &gap_lens,
-            gap_total,
-            genome_len
+            &lens, total, &ctg_lens, ctg_total, &gap_lens, gap_total, genome_len,
         );
     }
 }
