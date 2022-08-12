@@ -1,4 +1,5 @@
-use kseq::{parse_path, record::Fastx};
+use super::common::parse_fx;
+use kseq::record::Fastx;
 
 fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
     let mut index = 0;
@@ -49,7 +50,7 @@ fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
 
 pub fn attr(paths: &[&str], attr: &str) {
     for path in paths {
-        let mut records = parse_path(*path).unwrap();
+        let mut records = parse_fx(*path);
         let attr = attr.trim_matches(':');
         let attr_lower = attr.to_ascii_lowercase();
         while let Ok(Some(record)) = records.iter_record() {

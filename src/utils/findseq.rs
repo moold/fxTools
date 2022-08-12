@@ -1,4 +1,4 @@
-use kseq::parse_path;
+use super::common::parse_fx;
 use regex::Regex;
 
 pub fn findseq(paths: &[&str], subseq: &str, ignore_case: bool) {
@@ -8,7 +8,7 @@ pub fn findseq(paths: &[&str], subseq: &str, ignore_case: bool) {
         Regex::new(subseq).unwrap()
     };
     for path in paths {
-        let mut records = parse_path(*path).unwrap();
+        let mut records = parse_fx(*path);
         while let Ok(Some(record)) = records.iter_record() {
             let seq = record.seq();
             for mat in re.find_iter(seq) {

@@ -1,4 +1,6 @@
-use kseq::{parse_path, record::Fastx};
+use kseq::{parse_path, parse_reader, record::Fastx, Paths};
+use std::io::Cursor;
+use std::path::Path;
 
 const SEQ_COMP_TABLE: [u8; 256] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
@@ -145,7 +147,7 @@ where
     }
 }
 
-pub fn is_fasta_record(r: Fastx) -> bool {
+pub fn is_fasta_record(r: &Fastx) -> bool {
     r.sep().is_empty()
 }
 
@@ -163,8 +165,17 @@ pub fn is_fasta_file(path: &str) -> bool {
     } else {
         let mut records = parse_path(path).unwrap();
         if let Some(record) = records.iter_record().unwrap() {
-            return is_fasta_record(record);
+            return is_fasta_record(&record);
         }
         false
+    }
+}
+
+pub fn parse_fx(file: &str) -> Paths {
+    if !Path::new(file).exists() && file.chars().all(|x| "ATGCNatgcn".contains(x)) {
+        let file = format!(">unname\n{}", file);
+        parse_reader(Cursor::new(file)).unwrap()
+    } else {
+        parse_path(file).unwrap()
     }
 }

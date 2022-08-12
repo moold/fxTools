@@ -1,6 +1,6 @@
+use super::common::parse_fx;
 use crossbeam_channel::unbounded;
 use crossbeam_utils::thread;
-use kseq::parse_path;
 use rayon::prelude::*;
 use regex::Regex;
 use std::{cmp::max, fmt, fs::File, io::Write};
@@ -468,8 +468,7 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
     let mut gap_total: usize = 0;
 
     for infile in infiles {
-        let mut records =
-            parse_path(*infile).unwrap_or_else(|_| panic!("failed read file file: {}", infile));
+        let mut records = parse_fx(*infile);
         let out = out_ctg.then(|| {
             let out = infile.to_string() + ".ctg.fa";
             File::create(&out).unwrap_or_else(|_| panic!("failed create file: {}", out))

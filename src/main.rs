@@ -27,7 +27,7 @@ fn main() {
     let args = App::new("fxTools")
         .version(VERSION)
         .about("A toolset for processing sequences in FASTA/Q formats")
-        .override_usage(format!("{} [SUBCOMMAND] [OPTIONS] <input>", crate_name!()).as_str())
+        .override_usage(format!("{} [SUBCOMMAND] [OPTIONS] <input>...", crate_name!()).as_str())
         .global_setting(AppSettings::ArgRequiredElseHelp)
         .global_setting(AppSettings::ColoredHelp)
         .global_setting(AppSettings::DisableHelpSubcommand)
@@ -170,7 +170,7 @@ fn main() {
                         .long("region")
                         .value_name("STR|FILE")
                         .help("region (chr, chr:start-end, chr-start-end or chr1,chr2:start-end) or file (bed or ID list) \
-                            to be extracted, format: 0-based, [start, end).")
+                            to be extracted, format: 0-based, [start, end), random access with a fai index file is support.")
                         .required(true)
                         .takes_value(true)
                 )

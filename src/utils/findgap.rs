@@ -1,10 +1,10 @@
-use kseq::parse_path;
+use super::common::parse_fx;
 use regex::Regex;
 
 pub fn findgap(paths: &[&str], w: usize) {
     let re = Regex::new(&format!("(?i)N{{{w},}}", w = w)).unwrap();
     for path in paths {
-        let mut records = parse_path(*path).unwrap();
+        let mut records = parse_fx(*path);
         while let Ok(Some(record)) = records.iter_record() {
             let seq = record.seq();
             for mat in re.find_iter(seq) {
