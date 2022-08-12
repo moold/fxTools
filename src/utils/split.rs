@@ -1,5 +1,5 @@
-use super::common::{is_fasta_file, write_fx};
-use kseq::{parse_path, record::Fastx};
+use super::common::{is_fasta_file, parse_fx, write_fx};
+use kseq::record::Fastx;
 use std::{
     fs::{create_dir, File},
     io::BufWriter,
@@ -47,7 +47,7 @@ pub fn split(paths: &[&str], count: usize) {
     let mut outfiles = creat_outfiles(&outdir, count, is_fasta_file(paths[0]));
 
     for path in paths {
-        let mut records = parse_path(*path).unwrap();
+        let mut records = parse_fx(*path);
         while let Some(record) = records.iter_record().unwrap() {
             let w = outfiles.iter_mut().min_by_key(|v| v.size).unwrap();
             w.write(record);

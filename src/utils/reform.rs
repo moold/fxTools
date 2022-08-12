@@ -1,5 +1,5 @@
-use super::common::{print_fx, print_seq};
-use kseq::{parse_path, record::Fastx};
+use super::common::{parse_fx, print_fx, print_seq};
+use kseq::record::Fastx;
 use owo_colors::OwoColorize;
 use regex::Regex;
 
@@ -66,7 +66,7 @@ fn wrapc(path: &str) {
 
     fn count_bases(path: &str) -> Vec<[i32; 6]> {
         let mut bases = Vec::new();
-        let mut records = parse_path(path).unwrap();
+        let mut records = parse_fx(path);
         while let Ok(Some(record)) = records.iter_record() {
             if record.len() > bases.len() {
                 bases.resize(record.len(), [0; 6]);
@@ -88,7 +88,7 @@ fn wrapc(path: &str) {
     }
 
     let bases = count_bases(path);
-    let mut records = parse_path(path).unwrap();
+    let mut records = parse_fx(path);
     while let Ok(Some(record)) = records.iter_record() {
         println!(">{} {}", record.head(), record.des());
         let (seq, len) = (record.seq().as_bytes(), record.len());
@@ -129,7 +129,7 @@ fn split(r: Fastx, re: &Regex) {
 
 pub fn reform(paths: &[&str], reform: &str) {
     for path in paths {
-        let mut records = parse_path(*path).unwrap();
+        let mut records = parse_fx(*path);
 
         if reform == "lower" {
             while let Ok(Some(record)) = records.iter_record() {
