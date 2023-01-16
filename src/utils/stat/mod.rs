@@ -386,10 +386,17 @@ fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> 
                                 lens.push(len as u32);
                                 total += len;
                             }
-                            let l = buf.skip_bases(len + 1); // skip sep and qual
+                            let skip_line = buf.skip_lines(1); //skip sep
+                            if skip_line != 1 {
+                                skip_lines = 1;
+                                skip_bases = len;
+                                break;
+                            }
+
+                            let l = buf.skip_bases(len); // skip qual
                             is_new_record = true;
-                            if l != len + 1 {
-                                skip_bases = len + 1 - l;
+                            if l != len {
+                                skip_bases = len - l;
                                 len = 0;
                                 break;
                             } else {
@@ -417,9 +424,17 @@ fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> 
                                 break;
                             } else if c == b'+' {
                                 // fastq
-                                let l = buf.skip_bases(len + 1); // skip sep and qual
-                                if l != len + 1 {
-                                    skip_bases = len + 1 - l;
+                                let skip_line = buf.skip_lines(1); //skip sep
+                                if skip_line != 1 {
+                                    skip_lines = 1;
+                                    skip_bases = len;
+                                    break;
+                                }
+
+                                let l = buf.skip_bases(len); // skip qual
+                                is_new_record = true;
+                                if l != len {
+                                    skip_bases = len - l;
                                 }
                                 break;
                             }
