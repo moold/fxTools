@@ -121,15 +121,9 @@ fn getseq_by_index(
                 .expect("not a correct fai index file");
             seq = read_next_seq(&mut file, seq, *len as usize);
             for (mut start, mut end) in regions {
-                let sub_head = get_head_reset_region(
-                    &mut start,
-                    &mut end,
-                    *len as u32,
-                    head,
-                    reverse,
-                    complement,
-                );
-                println!(">{}", sub_head);
+                let sub_head =
+                    get_head_reset_region(&mut start, &mut end, *len, head, reverse, complement);
+                println!(">{sub_head}");
                 print_seq(&seq[start as usize..end as usize], reverse, complement);
             }
             valid_seq.push(head.to_owned());
@@ -145,10 +139,10 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
     for path in paths {
         let fai = (*path).to_owned() + ".fai";
         if let Ok(fai_infos) = read_fai(&fai) {
-            eprintln!("Note: detected fai file {}, enable random access mode", fai);
+            eprintln!("Note: detected fai file {fai}, enable random access mode");
             getseq_by_index(path, &fai_infos, &mut infos, reverse, complement);
         } else {
-            let mut records = parse_fx(*path);
+            let mut records = parse_fx(path);
             while let Ok(Some(record)) = records.iter_record() {
                 let head = record.head();
                 if let Some(regions) = infos.get_mut(head) {
@@ -165,9 +159,9 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
                             complement,
                         );
                         if is_fasta_record(&record) {
-                            println!(">{} {}", sub_head, des);
+                            println!(">{sub_head} {des}");
                         } else {
-                            println!("@{} {}", sub_head, des);
+                            println!("@{sub_head} {des}");
                         }
                         print_seq(&seqs[start as usize..end as usize], reverse, complement);
                         if !qual.is_empty() {
@@ -184,6 +178,6 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
         }
     }
     for (key, _) in infos.iter() {
-        eprintln!("Missing record in the fastx/fai file: {}", key);
+        eprintln!("Missing record in the fastx/fai file: {key}");
     }
 }

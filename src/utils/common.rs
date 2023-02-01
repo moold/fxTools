@@ -58,7 +58,7 @@ pub fn print_seq(seq: &str, reverse: bool, complement: bool) {
     if complement {
         iter_seqs.for_each(|x| print!("{}", SEQ_COMP_TABLE[x as usize] as char));
     } else {
-        iter_seqs.for_each(|x| print!("{}", x));
+        iter_seqs.for_each(|x| print!("{x}"));
     }
     println!();
 }
@@ -173,7 +173,7 @@ pub fn is_fasta_file(path: &str) -> bool {
 
 pub fn parse_fx(file: &str) -> Paths {
     if !Path::new(file).exists() && file.chars().all(|x| "ATGCNatgcn".contains(x)) {
-        let file = format!(">unname\n{}", file);
+        let file = format!(">unname\n{file}");
         parse_reader(Cursor::new(file)).unwrap()
     } else {
         parse_path(file).unwrap()

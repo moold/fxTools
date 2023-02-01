@@ -1,5 +1,5 @@
 use super::common::parse_fx;
-use crossbeam_channel::unbounded;
+use crossbeam_channel::{bounded, unbounded};
 use crossbeam_utils::thread;
 use rayon::prelude::*;
 use regex::Regex;
@@ -153,6 +153,66 @@ impl fmt::Display for His {
     }
 }
 
+fn out_step(lens: &[u32], step_len: u32, genome_len: usize) {
+    thread::scope(|work| {
+        let (in_s, in_r) = bounded(1024);
+        // input thread
+        work.spawn(move |_| {
+            let mut step = 0;
+            for (i, len) in lens.iter().enumerate(){
+                while *len >= step + step_len{
+                    step += step_len;
+                }
+
+                if *len >= step {
+                    in_s.send((step, &lens[i..])).unwrap();
+                    step += step_len;
+                }
+            }
+        });
+
+        //work thread
+        let mut nxs = work.spawn(move |_| {
+            let work_thread = 2;
+            thread::scope(|scoped| {
+                let mut handles = Vec::with_capacity(work_thread);
+                for _i in 0..work_thread {
+                    let in_r = in_r.clone();
+                    let handle = scoped.spawn(move |_| {
+                        let mut nxs = Vec::new();
+                        while let Ok((step, lens)) = in_r.recv() {
+                            let total = lens.iter().sum::<u32>();
+                           let nx = Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total as usize });
+                           nxs.push((step, lens.len(), total, nx.count[4], nx.len[4]));
+                        }
+                        nxs
+                    });
+                    handles.push(handle);
+                }
+
+                let mut nxs: Vec<(u32, usize, u32, usize, u32)> = Vec::new();
+                for res in handles.into_iter().map(|h| h.join().unwrap()){
+                    nxs.extend(res);
+                }
+                nxs
+            }).unwrap()
+        }).join().unwrap();
+
+        if !nxs.is_empty(){
+            // sort by step
+            nxs.sort_unstable_by_key(|k| k.0);
+            let w0 = max(nxs.last().unwrap().0.to_string().len(), 5) + 2; //safe unwrap
+            let w1 = max(nxs[0].3.to_string().len(), 9);
+            let w2 = max(nxs[0].4.to_string().len(), 10);
+            println!("{:<w$} {:^w1$} {:^w2$} {:^w1$} {:^w2$}", "Types", "Count", "Length", "N50 Count", "N50 Length", w = w0 + 2);
+            println!("{:<w$} {:^w1$} {:^w2$} {:^w1$} {:^w2$}", "", "(#)", "(bp)", "(#)", "(bp)", w = w0 + 2);
+            for (step, n50_count, n50_base, total_count, toal_base) in nxs {
+                println!(">={step:<w0$} {n50_count:^w1$} {n50_base:^w2$} {total_count:^w1$} {toal_base:^w2$}");
+            }
+        }
+    }).unwrap();
+}
+
 fn out_stat(lens: &[u32], total: usize, genome_len: usize) {
     let total_count = lens.len();
     let (hist, nx) = thread::scope(|work| {
@@ -170,8 +230,8 @@ fn out_stat(lens: &[u32], total: usize, genome_len: usize) {
     })
     .unwrap();
 
-    println!("{}", hist);
-    println!("\n\n[length stat]\n{}", nx);
+    println!("{hist}");
+    println!("\n\n[length stat]\n{nx}");
     let (sw1, sw2) = nx.get_width();
     println!("{:<5} {:^sw1$} {:^sw2$}", "Min.", "-", lens[0],);
     println!(
@@ -287,7 +347,13 @@ fn out_stats(
     println!("{:=<7}{:=^26}{:=^26}{:=^25}", "", "", "", "");
 }
 
-fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> (usize, Vec<u32>) {
+fn stat_read(
+    infiles: &[&str],
+    min_len: usize,
+    genome_len: usize,
+    step_len: usize,
+    out: bool,
+) -> (usize, Vec<u32>) {
     // exit if any thread panics
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |v| {
@@ -305,7 +371,7 @@ fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> 
         // read thread
         work.spawn(move |_| {
             for infile in infiles {
-                for mut reader in open_path(&infile) {
+                for mut reader in open_path(infile) {
                     loop {
                         let mut buf = r1.recv().unwrap();
                         match buf.fill(&mut reader) {
@@ -317,7 +383,7 @@ fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> 
                                 }
                             }
                             Ok(_n) => s2.send(Some(buf)).unwrap(),
-                            Err(e) => panic!("Failed to read file: {:?}, error: {:?}", infile, e),
+                            Err(e) => panic!("Failed to read file: {infile:?}, error: {e:?}"),
                         }
                     }
                 }
@@ -462,20 +528,31 @@ fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, out: bool) -> 
 
     if out && !lens.is_empty() {
         lens.par_sort_unstable();
-        out_stat(&lens, total, genome_len);
+        if step_len > 0 {
+            out_step(&lens, step_len as u32, genome_len);
+        } else {
+            out_stat(&lens, total, genome_len);
+        }
     };
     (total, lens)
 }
 
-pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, out_ctg: bool) {
+pub fn stat(
+    infiles: &[&str],
+    min_len: usize,
+    genome_len: usize,
+    n_len: usize,
+    step_len: usize,
+    out_ctg: bool,
+) {
     if n_len == 0 {
-        stat_read(infiles, min_len, genome_len, true);
+        stat_read(infiles, min_len, genome_len, step_len, true);
         return;
     }
     let mut lens = Vec::with_capacity(1024);
     let mut total: usize = 0;
 
-    let re = Regex::new(&format!("(?i)N{{{w},}}", w = n_len)).unwrap();
+    let re = Regex::new(&format!("(?i)N{{{n_len},}}")).unwrap();
     let mut ctg_lens = Vec::with_capacity(1024);
     let mut ctg_total: usize = 0;
 
@@ -483,10 +560,10 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
     let mut gap_total: usize = 0;
 
     for infile in infiles {
-        let mut records = parse_fx(*infile);
+        let mut records = parse_fx(infile);
         let out = out_ctg.then(|| {
             let out = infile.to_string() + ".ctg.fa";
-            File::create(&out).unwrap_or_else(|_| panic!("failed create file: {}", out))
+            File::create(&out).unwrap_or_else(|_| panic!("failed create file: {out}"))
         });
         while let Some(record) = records.iter_record().unwrap() {
             let len = record.len();
@@ -544,5 +621,5 @@ pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, o
 }
 
 pub fn sum_fx(infiles: &[&str]) -> usize {
-    stat_read(infiles, 0, 0, false).0
+    stat_read(infiles, 0, 0, 0, false).0
 }

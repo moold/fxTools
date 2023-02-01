@@ -31,7 +31,7 @@ pub fn diff(paths: &[&str]) {
         }
     }
     for (key, _) in seqs.iter() {
-        println!("{}\tfile1", key);
+        println!("{key}\tfile1");
         file1 += 1;
     }
 

@@ -19,15 +19,13 @@ where
             }
             Box::new(stdin())
         }
-        path => {
-            Box::new(File::open(path).unwrap_or_else(|_| panic!("Failed open file {:?}", path)))
-        }
+        path => Box::new(File::open(path).unwrap_or_else(|_| panic!("Failed open file {path:?}"))),
     };
 
     let mut format_bytes = [0u8; 2];
     reader
         .read_exact(&mut format_bytes)
-        .unwrap_or_else(|_| panic!("Failed read file {:?}", path));
+        .unwrap_or_else(|_| panic!("Failed read file {path:?}"));
     reader = Box::new(Cursor::new(format_bytes.to_vec()).chain(reader));
     if &format_bytes[..2] == b"\x1f\x8b" {
         // for gz foramt

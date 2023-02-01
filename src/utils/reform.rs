@@ -49,7 +49,7 @@ fn wrapc(path: &str) {
         let c: i32 = cs.iter().sum();
         if c <= 1 {
             // only one base
-            print!("{}", b)
+            print!("{b}")
         } else {
             // SNPs or INDELs
             match b {
@@ -129,7 +129,7 @@ fn split(r: Fastx, re: &Regex) {
 
 pub fn reform(paths: &[&str], reform: &str) {
     for path in paths {
-        let mut records = parse_fx(*path);
+        let mut records = parse_fx(path);
 
         if reform == "lower" {
             while let Ok(Some(record)) = records.iter_record() {
@@ -164,7 +164,7 @@ pub fn reform(paths: &[&str], reform: &str) {
                 .parse()
                 .unwrap();
             if is_align {
-                wrapc(*path);
+                wrapc(path);
             } else {
                 while let Ok(Some(record)) = records.iter_record() {
                     print_fx(record, w);
@@ -188,7 +188,7 @@ pub fn reform(paths: &[&str], reform: &str) {
             if w == 0 {
                 return;
             };
-            let re = Regex::new(&format!("(?i)N{{{w},}}", w = w)).unwrap();
+            let re = Regex::new(&format!("(?i)N{{{w},}}")).unwrap();
             while let Ok(Some(record)) = records.iter_record() {
                 split(record, &re);
             }
@@ -213,7 +213,7 @@ pub fn reform(paths: &[&str], reform: &str) {
                 }
             }
         } else {
-            panic!("unknown values: {} for --reform", reform);
+            panic!("unknown values: {reform} for --reform");
         }
     }
 }
