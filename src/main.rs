@@ -104,6 +104,15 @@ fn main() {
                         .takes_value(true),
                 )
                 .arg(
+                    Arg::new("step_len")
+                        .short('s')
+                        .long("step_len")
+                        .value_name("int[G|M|K]")
+                        .default_value("0")
+                        .help("output statistics using step increase mode, such as: >=INT, >=INT * 2, >=INT * 3 ...")
+                        .takes_value(true),
+                )
+                .arg(
                     Arg::new("n_len")
                         .short('n')
                         .long("n_len")
@@ -212,14 +221,14 @@ fn main() {
         assert!(v > 0, "not a valid split size");
         split(&paths, v);
     } else if let Some(v) = args.value_of("sample") {
-        let fra = Byte::from_str(&v).unwrap().get_bytes();
+        let fra = Byte::from_str(v).unwrap().get_bytes();
         let fra = if fra > 0 {
             let sum = sum_fx(&paths);
             fra as f64 / sum as f64
         } else {
             v.parse::<f64>().expect("not a valid sample size")
         };
-        sample(&paths, fra as f64);
+        sample(&paths, fra);
     } else if let Some(v) = args.subcommand_matches("findseq") {
         findseq(
             &paths,
@@ -251,11 +260,15 @@ fn main() {
         let n_len = Byte::from_str(subarg.value_of("n_len").unwrap())
             .unwrap()
             .get_bytes() as usize;
+        let step_len = Byte::from_str(subarg.value_of("step_len").unwrap())
+            .unwrap()
+            .get_bytes() as usize;
         stat(
             &paths,
             min_len,
             genome_len,
             n_len,
+            step_len,
             subarg.is_present("out_ctg"),
         );
     } else if let Some(_subarg) = args.subcommand_matches("diff") {
