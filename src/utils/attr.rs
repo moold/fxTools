@@ -50,7 +50,7 @@ fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
 
 pub fn attr(paths: &[&str], attr: &str) {
     for path in paths {
-        let mut records = parse_fx(*path);
+        let mut records = parse_fx(path);
         let attr = attr.trim_matches(':');
         let attr_lower = attr.to_ascii_lowercase();
         while let Ok(Some(record)) = records.iter_record() {

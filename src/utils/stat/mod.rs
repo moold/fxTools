@@ -189,7 +189,7 @@ fn out_step(lens: &[u32], step_len: u32, genome_len: usize) {
                     });
                     handles.push(handle);
                 }
-                
+
                 let mut nxs: Vec<(u32, usize, u32, usize, u32)> = Vec::new();
                 for res in handles.into_iter().map(|h| h.join().unwrap()){
                     nxs.extend(res);
@@ -347,7 +347,13 @@ fn out_stats(
     println!("{:=<7}{:=^26}{:=^26}{:=^25}", "", "", "", "");
 }
 
-fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, step_len:usize, out: bool) -> (usize, Vec<u32>) {
+fn stat_read(
+    infiles: &[&str],
+    min_len: usize,
+    genome_len: usize,
+    step_len: usize,
+    out: bool,
+) -> (usize, Vec<u32>) {
     // exit if any thread panics
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |v| {
@@ -524,14 +530,21 @@ fn stat_read(infiles: &[&str], min_len: usize, genome_len: usize, step_len:usize
         lens.par_sort_unstable();
         if step_len > 0 {
             out_step(&lens, step_len as u32, genome_len);
-        }else {
+        } else {
             out_stat(&lens, total, genome_len);
         }
     };
     (total, lens)
 }
 
-pub fn stat(infiles: &[&str], min_len: usize, genome_len: usize, n_len: usize, step_len: usize, out_ctg: bool) {
+pub fn stat(
+    infiles: &[&str],
+    min_len: usize,
+    genome_len: usize,
+    n_len: usize,
+    step_len: usize,
+    out_ctg: bool,
+) {
     if n_len == 0 {
         stat_read(infiles, min_len, genome_len, step_len, true);
         return;

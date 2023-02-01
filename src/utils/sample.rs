@@ -4,7 +4,7 @@ use rand::seq::index::sample as rsample;
 pub fn min_count(paths: &[&str]) -> usize {
     let mut n = 0;
     for path in paths {
-        let mut records = parse_fx(*path);
+        let mut records = parse_fx(path);
         while let Ok(Some(_)) = records.iter_record() {
             n += 1;
             if n >= 1000 {
@@ -31,7 +31,7 @@ pub fn sample(paths: &[&str], fra: f64) {
     let mut i = 0;
     let mut total = 0;
     for path in paths {
-        let mut records = parse_fx(*path);
+        let mut records = parse_fx(path);
         while let Some(record) = records.iter_record().unwrap() {
             if index[i] > 0 {
                 total += record.len();
@@ -44,5 +44,5 @@ pub fn sample(paths: &[&str], fra: f64) {
             }
         }
     }
-    eprintln!("sample size: {:?} bp", total);
+    eprintln!("sample size: {total:?} bp");
 }
