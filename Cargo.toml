@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 atty = "0.2"
-kseq = "0.4"
+kseq = "0.5.1"
 clap = { version = "3.2", features = ["cargo"] }
 byte-unit = "4.0.12"
 regex = "1.6"
