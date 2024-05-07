@@ -171,6 +171,9 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
                     }
                 }
                 infos.remove(head);
+                if infos.is_empty() {
+                    break;
+                }
             }
         }
         if infos.is_empty() {

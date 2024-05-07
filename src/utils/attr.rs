@@ -28,7 +28,23 @@ fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
                 } else {
                     print!("NA");
                 }
-            }
+            },
+            "qsont" => {
+                let qual = record.qual();
+                let skip_len = if qual.len() >= 60 { 60 } else { 0 };
+                if !qual.is_empty() {
+                    // \text{read Q} = -10\log_{10}\big[\tfrac{1}{N}\sum 10^{-q_i/10}\big]
+                    let e_sum: f64 = qual
+                        .as_bytes()
+                        .iter()
+                        .skip(skip_len)
+                        .map(|x| 10_f64.powf(-0.1 * (x - 33) as f64))
+                        .sum();
+                    print!("{}", -10.0 * (e_sum / (record.len() - skip_len)as f64).log10());
+                } else {
+                    print!("NA");
+                }
+            },
             "" => (),
             _ => {
                 let mut t = [0; 256];

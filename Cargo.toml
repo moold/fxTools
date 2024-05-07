@@ -27,5 +27,8 @@ rand = { version = "0.8.5", features = ["alloc"] }
 tikv-jemallocator = "0.5"
 
 [profile.release]
-strip = "debuginfo"
+strip = "none"
+lto = true
+codegen-units = 1
+panic = "abort"
 

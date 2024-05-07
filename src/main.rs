@@ -48,7 +48,8 @@ fn main() {
                       len: sequences length
                       x:   count x, case sensitive, where x can be a single base
                            or multiple bases (gcGC means count g + c + G + C)
-                      qs:  quality score, for FASTQ"
+                      qs:  quality score, for FASTQ,
+                      qsont:  quality score, for FASTQ from dorado"
                     })
                 .takes_value(true),
         )

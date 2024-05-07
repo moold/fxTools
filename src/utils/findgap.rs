@@ -8,7 +8,7 @@ pub fn findgap(paths: &[&str], w: usize) {
         while let Ok(Some(record)) = records.iter_record() {
             let seq = record.seq();
             for mat in re.find_iter(seq) {
-                println!("{}\t{}\t{}", record.head(), mat.start(), mat.end() - 1);
+                println!("{}\t{}\t{}\t{}\t{}", record.head(), mat.start(), mat.end() - 1, mat.end() - mat.start(), record.len());
             }
         }
     }
