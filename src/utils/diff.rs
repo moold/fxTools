@@ -17,7 +17,7 @@ pub fn diff(paths: &[&str]) {
     let (mut same, mut diff, mut file1, mut file2) = (0, 0, 0, 0);
     while let Ok(Some(record)) = records.iter_record() {
         if let Some(seq) = seqs.get(record.head()) {
-            if seq == record.seq() {
+            if seq.eq_ignore_ascii_case(record.seq()) {
                 println!("{}\tsame", record.head());
                 same += 1;
             } else {
