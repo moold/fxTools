@@ -4,8 +4,8 @@ use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
-fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32)>> {
-    let mut out_info: HashMap<String, Vec<(u32, u32)>> = HashMap::new();
+fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32, bool, bool)>> {
+    let mut out_info = HashMap::new();
 
     if let Ok(file) = File::open(path) {
         for line in BufReader::new(file).lines().flatten() {
@@ -13,12 +13,13 @@ fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32)>> {
                 let v: Vec<&str> = line.split(char::is_whitespace).collect();
                 let out_info = out_info.entry(v[0].to_owned()).or_insert(vec![]);
                 if v.len() == 1 {
-                    out_info.push((0, 0))
+                    out_info.push((0, 0, false, false))
                 } else {
                     let start = v[1].parse::<u32>().unwrap_or(0);
                     let end = v[2].parse::<u32>().unwrap_or(0);
+                    let is_rev = v.len() >= 4 && v[3] == "-";
                     if start != end || end == 0 {
-                        out_info.push((start, end));
+                        out_info.push((start, end, is_rev, is_rev));
                     }
                 }
             }
@@ -34,13 +35,13 @@ fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32)>> {
                     out_info
                         .entry(chr.to_owned())
                         .or_insert(vec![])
-                        .push((start, end));
+                        .push((start, end, false, false));
                 }
             } else {
                 out_info
                     .entry(region.to_owned())
                     .or_insert(vec![])
-                    .push((0, 0));
+                    .push((0, 0, false, false));
             }
         }
     }
@@ -108,7 +109,7 @@ fn get_head_reset_region(
 fn getseq_by_index(
     path: &str,
     fai: &HashMap<String, (u32, u64)>,
-    infos: &mut HashMap<String, Vec<(u32, u32)>>,
+    infos: &mut HashMap<String, Vec<(u32, u32, bool, bool)>>,
     reverse: bool,
     complement: bool,
 ) {
@@ -120,9 +121,9 @@ fn getseq_by_index(
             file.seek(SeekFrom::Start(*off))
                 .expect("not a correct fai index file");
             seq = read_next_seq(&mut file, seq, *len as usize);
-            for (mut start, mut end) in regions {
+            for (mut start, mut end, this_reverse, this_complement) in regions {
                 let sub_head =
-                    get_head_reset_region(&mut start, &mut end, *len, head, reverse, complement);
+                    get_head_reset_region(&mut start, &mut end, *len, head, reverse || *this_reverse, complement || *this_complement);
                 println!(">{sub_head}");
                 print_seq(&seq[start as usize..end as usize], reverse, complement);
             }
@@ -149,14 +150,14 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
                     let des = record.des();
                     let seqs = record.seq();
                     let qual = record.qual();
-                    for (mut start, mut end) in regions {
+                    for (mut start, mut end, this_reverse, this_complement) in regions {
                         let sub_head = get_head_reset_region(
                             &mut start,
                             &mut end,
                             record.len() as u32,
                             head,
-                            reverse,
-                            complement,
+                            reverse || *this_reverse,
+                            complement || *this_complement,
                         );
                         if is_fasta_record(&record) {
                             println!(">{sub_head} {des}");
