@@ -125,7 +125,7 @@ fn getseq_by_index(
                 let sub_head =
                     get_head_reset_region(&mut start, &mut end, *len, head, reverse || *this_reverse, complement || *this_complement);
                 println!(">{sub_head}");
-                print_seq(&seq[start as usize..end as usize], reverse, complement);
+                print_seq(&seq[start as usize..end as usize], reverse || *this_reverse, complement || *this_complement);
             }
             valid_seq.push(head.to_owned());
         }
@@ -164,10 +164,10 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
                         } else {
                             println!("@{sub_head} {des}");
                         }
-                        print_seq(&seqs[start as usize..end as usize], reverse, complement);
+                        print_seq(&seqs[start as usize..end as usize], reverse || *this_reverse, complement || *this_complement);
                         if !qual.is_empty() {
                             println!("{}", record.sep());
-                            print_seq(&qual[start as usize..end as usize], reverse, false);
+                            print_seq(&qual[start as usize..end as usize], reverse || *this_reverse, false);
                         }
                     }
                 }
