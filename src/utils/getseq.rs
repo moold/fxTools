@@ -92,7 +92,7 @@ fn get_head_reset_region(
         *end = len;
         sub_head = name.to_owned();
     } else {
-        if *end == 0 {
+        if *end == 0 || *end > len{
             *end = len;
         }
         sub_head = format!("{}:{}-{}", name, start, *end - 1);
