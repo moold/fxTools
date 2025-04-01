@@ -4,7 +4,7 @@ use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
-fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32, bool, bool)>> {
+fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32, bool, bool, String)>> {
     let mut out_info = HashMap::new();
 
     if let Ok(file) = File::open(path) {
@@ -13,13 +13,18 @@ fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32, bool, bool)>> {
                 let v: Vec<&str> = line.split(char::is_whitespace).collect();
                 let out_info = out_info.entry(v[0].to_owned()).or_insert(vec![]);
                 if v.len() == 1 {
-                    out_info.push((0, 0, false, false))
+                    out_info.push((0, 0, false, false, String::new()))
                 } else {
                     let start = v[1].parse::<u32>().unwrap_or(0);
                     let end = v[2].parse::<u32>().unwrap_or(0);
                     let is_rev = v.len() >= 4 && v[3] == "-";
+                    let seq_name = if v.len() >= 4 && v[3] != "-" && v[3] != "+" {
+                        v[3].to_owned()
+                    }else {
+                        String::new()  
+                    };
                     if start != end || end == 0 {
-                        out_info.push((start, end, is_rev, is_rev));
+                        out_info.push((start, end, is_rev, is_rev, seq_name));
                     }
                 }
             }
@@ -35,13 +40,13 @@ fn get_out_info(path: &str) -> HashMap<String, Vec<(u32, u32, bool, bool)>> {
                     out_info
                         .entry(chr.to_owned())
                         .or_insert(vec![])
-                        .push((start, end, false, false));
+                        .push((start, end, false, false, String::new()));
                 }
             } else {
                 out_info
                     .entry(region.to_owned())
                     .or_insert(vec![])
-                    .push((0, 0, false, false));
+                    .push((0, 0, false, false, String::new()));
             }
         }
     }
@@ -109,7 +114,7 @@ fn get_head_reset_region(
 fn getseq_by_index(
     path: &str,
     fai: &HashMap<String, (u32, u64)>,
-    infos: &mut HashMap<String, Vec<(u32, u32, bool, bool)>>,
+    infos: &mut HashMap<String, Vec<(u32, u32, bool, bool, String)>>,
     reverse: bool,
     complement: bool,
 ) {
@@ -121,9 +126,12 @@ fn getseq_by_index(
             file.seek(SeekFrom::Start(*off))
                 .expect("not a correct fai index file");
             seq = read_next_seq(&mut file, seq, *len as usize);
-            for (mut start, mut end, this_reverse, this_complement) in regions {
-                let sub_head =
-                    get_head_reset_region(&mut start, &mut end, *len, head, reverse || *this_reverse, complement || *this_complement);
+            for (mut start, mut end, this_reverse, this_complement, name) in regions {
+                let sub_head = if name.is_empty(){
+                    &get_head_reset_region(&mut start, &mut end, *len, head, reverse || *this_reverse, complement || *this_complement)
+                }else{
+                    name
+                };
                 println!(">{sub_head}");
                 print_seq(&seq[start as usize..end as usize], reverse || *this_reverse, complement || *this_complement);
             }
@@ -150,15 +158,20 @@ pub fn getseq(paths: &[&str], region: &str, reverse: bool, complement: bool) {
                     let des = record.des();
                     let seqs = record.seq();
                     let qual = record.qual();
-                    for (mut start, mut end, this_reverse, this_complement) in regions {
-                        let sub_head = get_head_reset_region(
-                            &mut start,
-                            &mut end,
-                            record.len() as u32,
-                            head,
-                            reverse || *this_reverse,
-                            complement || *this_complement,
-                        );
+                    for (mut start, mut end, this_reverse, this_complement, name) in regions {
+                        let sub_head = if name.is_empty() { 
+                            &get_head_reset_region(
+                                &mut start,
+                                &mut end,
+                                record.len() as u32,
+                                head,
+                                reverse || *this_reverse,
+                                complement || *this_complement,
+                            )
+                        }else {
+                            name
+                        };
+
                         if is_fasta_record(&record) {
                             println!(">{sub_head} {des}");
                         } else {
