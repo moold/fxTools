@@ -1,5 +1,14 @@
 use super::common::parse_fx;
 use kseq::record::Fastx;
+use once_cell::sync::Lazy;
+
+static QS_ARRAY:  Lazy<[f64; 256]> = Lazy::new(|| {
+    let mut arr = [0.0; 256];
+    for i in 33..arr.len(){
+        arr[i] = 10_f64.powf(-0.1 * (i - 33) as f64);
+    }
+    arr
+});
 
 fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
     let mut index = 0;
@@ -20,9 +29,8 @@ fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
                 if !qual.is_empty() {
                     // \text{read Q} = -10\log_{10}\big[\tfrac{1}{N}\sum 10^{-q_i/10}\big]
                     let e_sum: f64 = qual
-                        .as_bytes()
-                        .iter()
-                        .map(|x| 10_f64.powf(-0.1 * (x - 33) as f64))
+                        .bytes()
+                        .map(|x| QS_ARRAY[x as usize])
                         .sum();
                     print!("{}", -10.0 * (e_sum / record.len() as f64).log10());
                 } else {
@@ -35,10 +43,9 @@ fn out_attr(record: Fastx, attr: &str, attr_lower: &str) {
                 if !qual.is_empty() {
                     // \text{read Q} = -10\log_{10}\big[\tfrac{1}{N}\sum 10^{-q_i/10}\big]
                     let e_sum: f64 = qual
-                        .as_bytes()
-                        .iter()
+                        .bytes()
                         .skip(skip_len)
-                        .map(|x| 10_f64.powf(-0.1 * (x - 33) as f64))
+                        .map(|x|  QS_ARRAY[x as usize])
                         .sum();
                     print!("{}", -10.0 * (e_sum / (record.len() - skip_len)as f64).log10());
                 } else {
