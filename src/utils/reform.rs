@@ -146,12 +146,11 @@ pub fn reform(paths: &[&str], reform: &str) {
         } else if reform == "fa2fq" {
             while let Ok(Some(record)) = records.iter_record() {
                 println!(
-                    "@{} {}\n{}\n+\n{:!<4$}",
+                    "@{} {}\n{}\n+\n{}",
                     record.head(),
                     record.des(),
                     record.seq(),
-                    "",
-                    record.len()
+                    "!".repeat(record.len())
                 );
             }
         } else if reform.starts_with("line") {
