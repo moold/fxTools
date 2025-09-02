@@ -324,9 +324,9 @@ fn out_stats(
     );
 
     for min_len in [10000, 100000, 1000000] {
-        let (len_total, len_count) = acc_min(lens, min_len);
-        let (ctg_total, ctg_count) = acc_min(ctg_lens, min_len);
-        let (gap_total, gap_count) = acc_min(gap_lens, min_len);
+        let (len_count, len_total) = acc_min(lens, min_len);
+        let (ctg_count, ctg_total) = acc_min(ctg_lens, min_len);
+        let (gap_count, gap_total) = acc_min(gap_lens, min_len);
         println!(
             "{:<7}{:^16}{:^10}{:^16}{:^10}{:^16}{:^9}",
             if min_len == 1000000 {
