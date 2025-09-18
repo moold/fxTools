@@ -17,7 +17,7 @@ use utils::{
     getseq::getseq,
     reform::reform,
     sample::sample,
-    split::split,
+    split::{splits, splitr},
     stat::{stat, sum_fx},
 };
 
@@ -80,8 +80,10 @@ fn main() {
             Arg::new("split")
                 .short('p')
                 .long("split")
-                .value_name("INT")
-                .help("split file with INT subfiles in total")
+                .value_name("INT[s|r]")
+                .help("split input into multiple files.\n \
+                        INT|INTs (default, 's'): split into INT subfiles in total\n \
+                        INTr ('r'): each subfile contains INT records")
                 .takes_value(true),
         )
         .arg(
@@ -218,9 +220,27 @@ fn main() {
     } else if let Some(v) = args.value_of("reform") {
         reform(&paths, v);
     } else if let Some(v) = args.value_of("split") {
-        let v = v.parse::<usize>().expect("not a valid split size");
-        assert!(v > 0, "not a valid split size");
-        split(&paths, v);
+        let raw = v.trim();
+        let (num_str, mode) = match raw.chars().last().unwrap() {
+            's' => (&raw[..raw.len()-1], 's'),
+            'r' => (&raw[..raw.len()-1], 'r'),
+             _  => (raw, 's'),
+        };
+
+        let n = num_str
+            .parse::<usize>()
+            .expect("not a valid split size");
+        assert!(n > 0, "split value must be > 0");
+
+        match mode {
+            's' => {
+                splits(&paths, n);
+            }
+            'r' => {
+                splitr(&paths, n);
+            },
+            _ => unreachable!(),
+        }
     } else if let Some(v) = args.value_of("sample") {
         let fra = Byte::from_str(v).unwrap().get_bytes();
         let fra = if fra > 0 {
