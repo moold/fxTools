@@ -10,7 +10,7 @@ A toolset for processing sequences in FASTA/Q formats
 #### Download and install
 
 ```sh
-git clone git@github.com:moold/fxTools.git
+git clone https://github.com/moold/fxTools.git
 cd fxTools && cargo build --release
 # ./target/release/fxTools
 ```
