@@ -150,7 +150,7 @@ pub fn reform(paths: &[&str], reform: &str) {
                     record.head(),
                     record.des(),
                     record.seq(),
-                    "!".repeat(record.len())
+                    "I".repeat(record.len())
                 );
             }
         } else if reform.starts_with("line") {
