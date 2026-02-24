@@ -90,8 +90,8 @@ fn main() {
             Arg::new("sample")
                 .short('s')
                 .long("sample")
-                .value_name("int[G|M|K]|float")
-                .help("subsample reads, int is the total bases, float is the fraction")
+                .value_name("int[G|M|K]|float|P")
+                .help("subsample reads, int is the total bases, float is the fraction. Append 'P' for paired-end mode to keep reads synchronized across files.")
                 .takes_value(true),
         )
         .subcommand(
@@ -242,14 +242,23 @@ fn main() {
             _ => unreachable!(),
         }
     } else if let Some(v) = args.value_of("sample") {
-        let fra = Byte::from_str(v).unwrap().get_bytes();
+        let v = v.trim();
+        let is_paired = v.ends_with('P') || v.ends_with('p');
+        let val_str = if is_paired {&v[..v.len() - 1] } else { v };
+
+
+        let fra = Byte::from_str(val_str).unwrap().get_bytes();
         let fra = if fra > 0 {
             let sum = sum_fx(&paths);
             fra as f64 / sum as f64
         } else {
-            v.parse::<f64>().expect("not a valid sample size")
+            val_str.parse::<f64>().expect("not a valid sample size")
         };
-        sample(&paths, fra);
+        if is_paired {
+            sample(&paths, fra, Some(42));
+        }else {
+            sample(&paths, fra, None);
+        }
     } else if let Some(v) = args.subcommand_matches("findseq") {
         findseq(
             &paths,

@@ -171,7 +171,7 @@ pub fn is_fasta_file(path: &str) -> bool {
     }
 }
 
-pub fn parse_fx(file: &str) -> Paths {
+pub fn parse_fx(file: &str) -> Paths<'_> {
     if !Path::new(file).exists() && file.chars().all(|x| "ATGCNatgcn".contains(x)) {
         let file = format!(">unname\n{file}");
         parse_reader(Cursor::new(file)).unwrap()
