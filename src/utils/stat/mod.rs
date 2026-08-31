@@ -179,18 +179,18 @@ fn out_step(lens: &[u32], step_len: u32, genome_len: usize) {
                 for _i in 0..work_thread {
                     let in_r = in_r.clone();
                     let handle = scoped.spawn(move |_| {
-                        let mut nxs = Vec::new();
+                        let mut nxs: Vec<(u32, usize, usize, usize, u32)> = Vec::new();
                         while let Ok((step, lens)) = in_r.recv() {
-                            let total = lens.iter().sum::<u32>();
-                           let nx = Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total as usize });
-                           nxs.push((step, lens.len(), total, nx.count[4], nx.len[4]));
+                            let total = lens.iter().map(|&x| x as usize).sum::<usize>();
+                            let nx = Nx::new().fill(lens, if genome_len > 0 { genome_len } else { total as usize });
+                            nxs.push((step, lens.len(), total, nx.count[4], nx.len[4]));
                         }
                         nxs
                     });
                     handles.push(handle);
                 }
 
-                let mut nxs: Vec<(u32, usize, u32, usize, u32)> = Vec::new();
+                let mut nxs: Vec<(u32, usize, usize, usize, u32)> = Vec::new();
                 for res in handles.into_iter().map(|h| h.join().unwrap()){
                     nxs.extend(res);
                 }
@@ -256,7 +256,9 @@ fn out_stats(
     let acc_min = |lens: &[u32], min| {
         lens.iter()
             .filter(|&&x| x >= min)
-            .fold((0, 0), |acc, x| (acc.0 + 1, acc.1 + x))
+            .fold((0usize, 0usize), |(count, total), &x| {
+                (count + 1, total + x as usize)
+            })
     };
     let (nx, ctg_nx, gap_nx) = thread::scope(|work| {
         let nx = work
